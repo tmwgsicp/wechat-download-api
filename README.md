@@ -2,14 +2,16 @@
 
 # WeChat Download API
 
-### 微信公众号文章获取 API 服务
+### 微信公众号文章获取 & RSS 订阅服务
 
-**扫码登录 | 文章抓取 | 公众号搜索 | 一键部署**
+**完全开源 | 免费部署 | RSS 订阅 | 文章抓取 | 反风控**
 
 [![GitHub stars](https://img.shields.io/github/stars/tmwgsicp/wechat-download-api?style=for-the-badge&logo=github)](https://github.com/tmwgsicp/wechat-download-api/stargazers)
 [![License](https://img.shields.io/badge/License-AGPL%203.0-blue?style=for-the-badge)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+
+> **100% 开源，100% 免费。** 代码完全公开，私有化部署无任何限制，不搞"开源"之名行收费之实。
 
 </div>
 
@@ -17,21 +19,31 @@
 
 ## 功能特性
 
-- **文章内容获取** — 通过 URL 获取文章完整内容（标题、作者、正文、图片）
-- **文章列表** — 获取任意公众号历史文章列表，支持分页
-- **文章搜索** — 在指定公众号文章中按关键词搜索
-- **公众号搜索** — 搜索公众号并获取 FakeID
+- **RSS 订阅** — 订阅任意公众号，自动定时拉取新文章，生成标准 RSS 2.0 源，接入 FreshRSS / Feedly 等阅读器即可使用
+- **文章内容获取** — 通过 URL 获取文章完整内容（标题、作者、正文 HTML / 纯文本、图片列表）
+- **反风控体系** — Chrome TLS 指纹模拟 + IP 代理池轮转 + 三层自动限频，有效对抗微信封控
+- **文章列表 & 搜索** — 获取任意公众号历史文章列表，支持分页和关键词搜索
+- **公众号搜索** — 按名称搜索公众号，获取 FakeID
+- **扫码登录** — 微信公众平台扫码登录，凭证自动保存，4 天有效期
 - **图片代理** — 代理微信 CDN 图片，解决防盗链问题
-- **扫码登录** — 微信公众平台扫码登录，凭证自动保存
-- **自动限频** — 内置三层限频机制（全局/IP/文章间隔），防止触发微信风控
-- **Webhook 通知** — 登录过期、触发验证等事件自动推送
-- **RSS 订阅** — 订阅任意公众号，自动定时拉取新文章，生成标准 RSS 2.0 源
-- **API 文档** — 自动生成 Swagger UI，在线调试所有接口
+- **Webhook 通知** — 登录过期、触发验证等事件自动推送（支持企业微信机器人）
+- **API 文档** — 自动生成 Swagger UI / ReDoc，在线调试所有接口
 
 <div align="center">
   <img src="assets/dashboard.jpg" width="800" alt="管理面板">
   <p><em>管理面板 — 登录状态、接口文档、在线测试一站式管理</em></p>
+  <br>
+  <img src="assets/rss.jpg" width="800" alt="RSS 订阅管理">
+  <p><em>RSS 订阅管理 — 搜索公众号一键订阅，复制地址接入 RSS 阅读器</em></p>
 </div>
+
+---
+
+## SaaS 托管版（即将推出）
+
+不想自己部署？我们正在筹备 **RSS 订阅托管服务**——无需服务器、无需配置，输入公众号名称即可获得 RSS 订阅地址，直接接入你喜欢的 RSS 阅读器。同时也在评估开放文章内容获取 API 的托管方案。
+
+感兴趣的话欢迎扫码添加微信，提前锁定体验名额 👇 [联系方式](#联系方式)
 
 ---
 
@@ -406,7 +418,9 @@ Cookie 登录有效期约 4 天，过期后需重新扫码登录。配置 `WEBHO
 |------|------|
 | **Web 框架** | FastAPI |
 | **ASGI 服务器** | Uvicorn |
-| **HTTP 客户端** | HTTPX |
+| **HTTP 客户端** | curl_cffi（Chrome TLS 指纹）/ HTTPX（降级） |
+| **反风控** | TLS 指纹模拟 + SOCKS5/HTTP 代理池轮转 |
+| **RSS 存储** | SQLite（零配置，数据本地化） |
 | **配置管理** | python-dotenv |
 | **运行环境** | Python 3.8+ |
 
@@ -414,17 +428,14 @@ Cookie 登录有效期约 4 天，过期后需重新扫码登录。配置 `WEBHO
 
 ## 开源协议
 
-本项目采用 **AGPL 3.0** 协议开源。
+本项目采用 **AGPL 3.0** 协议开源，**所有功能代码完整公开，私有化部署完全免费**。
 
 | 使用场景 | 是否允许 |
 |---------|---------|
 | 个人学习和研究 | 允许，免费使用 |
 | 企业内部使用 | 允许，免费使用 |
-| 修改代码内部使用 | 允许，免费使用 |
+| 私有化部署 | 允许，免费使用 |
 | 修改后对外提供网络服务 | 需开源修改后的代码 |
-| 集成到产品中销售 | 需开源或取得商业授权 |
-
-> **AGPL 3.0 核心要求**：修改代码并通过网络提供服务时，必须公开源代码。
 
 详见 [LICENSE](LICENSE) 文件。
 
@@ -471,7 +482,9 @@ Cookie 登录有效期约 4 天，过期后需重新扫码登录。配置 `WEBHO
 ## 致谢
 
 - [FastAPI](https://fastapi.tiangolo.com/) — 高性能 Python Web 框架
+- [curl_cffi](https://github.com/lexiforest/curl_cffi) — 支持浏览器 TLS 指纹模拟的 HTTP 客户端
 - [HTTPX](https://www.python-httpx.org/) — 现代化 HTTP 客户端
+- [gost](https://github.com/go-gost/gost) — 轻量级代理工具
 
 ---
 
