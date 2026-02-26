@@ -13,8 +13,6 @@ import time
 import logging
 from datetime import datetime, timezone
 from html import escape as html_escape
-from urllib.parse import quote
-from xml.etree.ElementTree import Element, SubElement, tostring
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -23,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from utils import rss_store
 from utils.rss_poller import rss_poller, POLL_INTERVAL
+from utils.image_proxy import proxy_image_url
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +119,11 @@ async def get_subscriptions(request: Request):
 
     items = []
     for s in subs:
+        # 将头像 URL 转换为代理链接
+        head_img = proxy_image_url(s.get("head_img", ""), base_url)
         items.append({
             **s,
+            "head_img": head_img,
             "rss_url": f"{base_url}/api/rss/{s['fakeid']}",
         })
 
@@ -173,13 +175,6 @@ async def poller_status():
 
 # ── RSS XML 输出 ──────────────────────────────────────────
 
-def _proxy_cover(url: str, base_url: str) -> str:
-    """将微信 CDN 封面图地址替换为本服务的图片代理地址"""
-    if url and "mmbiz.qpic.cn" in url:
-        return base_url + "/api/image?url=" + quote(url, safe="")
-    return url
-
-
 def _rfc822(ts: int) -> str:
     """Unix 时间戳 → RFC 822 日期字符串"""
     if not ts:
@@ -190,81 +185,137 @@ def _rfc822(ts: int) -> str:
 
 def _build_rss_xml(fakeid: str, sub: dict, articles: list,
                    base_url: str) -> str:
-    rss = Element("rss", version="2.0")
-    rss.set("xmlns:atom", "http://www.w3.org/2005/Atom")
-
-    channel = SubElement(rss, "channel")
-    SubElement(channel, "title").text = sub.get("nickname") or fakeid
-    SubElement(channel, "link").text = "https://mp.weixin.qq.com"
-    SubElement(channel, "description").text = (
-        f'{sub.get("nickname", "")} 的微信公众号文章 RSS 订阅'
-    )
-    SubElement(channel, "language").text = "zh-CN"
-    SubElement(channel, "lastBuildDate").text = _rfc822(int(time.time()))
-    SubElement(channel, "generator").text = "WeChat Download API"
-
-    atom_link = SubElement(channel, "atom:link")
-    atom_link.set("href", f"{base_url}/api/rss/{fakeid}")
-    atom_link.set("rel", "self")
-    atom_link.set("type", "application/rss+xml")
-
+    """
+    构建 RSS XML，使用 CDATA 包裹 HTML 内容
+    """
+    from xml.dom import minidom
+    
+    # 创建 XML 文档
+    doc = minidom.Document()
+    
+    # 创建根元素
+    rss = doc.createElement("rss")
+    rss.setAttribute("version", "2.0")
+    rss.setAttribute("xmlns:atom", "http://www.w3.org/2005/Atom")
+    doc.appendChild(rss)
+    
+    # 创建 channel
+    channel = doc.createElement("channel")
+    rss.appendChild(channel)
+    
+    # Channel 基本信息
+    def add_text_element(parent, tag, text):
+        elem = doc.createElement(tag)
+        elem.appendChild(doc.createTextNode(str(text)))
+        parent.appendChild(elem)
+        return elem
+    
+    add_text_element(channel, "title", sub.get("nickname") or fakeid)
+    add_text_element(channel, "link", "https://mp.weixin.qq.com")
+    add_text_element(channel, "description", 
+                     f'{sub.get("nickname", "")} 的微信公众号文章 RSS 订阅')
+    add_text_element(channel, "language", "zh-CN")
+    add_text_element(channel, "lastBuildDate", _rfc822(int(time.time())))
+    add_text_element(channel, "generator", "WeChat Download API")
+    
+    # atom:link
+    atom_link = doc.createElement("atom:link")
+    atom_link.setAttribute("href", f"{base_url}/api/rss/{fakeid}")
+    atom_link.setAttribute("rel", "self")
+    atom_link.setAttribute("type", "application/rss+xml")
+    channel.appendChild(atom_link)
+    
+    # Channel 图片
     if sub.get("head_img"):
-        image = SubElement(channel, "image")
-        SubElement(image, "url").text = sub["head_img"]
-        SubElement(image, "title").text = sub.get("nickname", "")
-        SubElement(image, "link").text = "https://mp.weixin.qq.com"
-
+        image = doc.createElement("image")
+        head_img_proxied = proxy_image_url(sub["head_img"], base_url)
+        add_text_element(image, "url", head_img_proxied)
+        add_text_element(image, "title", sub.get("nickname", ""))
+        add_text_element(image, "link", "https://mp.weixin.qq.com")
+        channel.appendChild(image)
+    
+    # 文章列表
     for a in articles:
-        item = SubElement(channel, "item")
-        SubElement(item, "title").text = a.get("title", "")
-
+        item = doc.createElement("item")
+        
+        add_text_element(item, "title", a.get("title", ""))
+        
         link = a.get("link", "")
-        SubElement(item, "link").text = link
-
-        guid = SubElement(item, "guid")
-        guid.text = link
-        guid.set("isPermaLink", "true")
-
+        add_text_element(item, "link", link)
+        
+        guid = doc.createElement("guid")
+        guid.setAttribute("isPermaLink", "true")
+        guid.appendChild(doc.createTextNode(link))
+        item.appendChild(guid)
+        
         if a.get("publish_time"):
-            SubElement(item, "pubDate").text = _rfc822(a["publish_time"])
-
+            add_text_element(item, "pubDate", _rfc822(a["publish_time"]))
+        
         if a.get("author"):
-            SubElement(item, "author").text = a["author"]
-
-        cover = _proxy_cover(a.get("cover", ""), base_url)
+            add_text_element(item, "author", a["author"])
+        
+        # 构建 description HTML
+        cover = proxy_image_url(a.get("cover", ""), base_url)
         digest = html_escape(a.get("digest", "")) if a.get("digest") else ""
         author = html_escape(a.get("author", "")) if a.get("author") else ""
         title_escaped = html_escape(a.get("title", ""))
-
+        
+        content_html = a.get("content", "")
         html_parts = []
-        if cover:
+        
+        if content_html:
+            # 统一策略:入库时已代理(见utils/rss_poller.py:236),RSS输出时直接使用
             html_parts.append(
-                f'<div style="margin-bottom:12px">'
-                f'<a href="{html_escape(link)}">'
-                f'<img src="{html_escape(cover)}" alt="{title_escaped}" '
-                f'style="max-width:100%;height:auto;border-radius:8px" />'
-                f'</a></div>'
+                f'<div style="font-size:16px;line-height:1.8;color:#333">'
+                f'{content_html}'
+                f'</div>'
             )
-        if digest:
+            if author:
+                html_parts.append(
+                    f'<hr style="margin:24px 0;border:none;border-top:1px solid #eee" />'
+                    f'<p style="color:#888;font-size:13px;margin:0">作者: {author}</p>'
+                )
+        else:
+            if cover:
+                html_parts.append(
+                    f'<div style="margin-bottom:12px">'
+                    f'<a href="{html_escape(link)}">'
+                    f'<img src="{html_escape(cover)}" alt="{title_escaped}" '
+                    f'style="max-width:100%;height:auto;border-radius:8px" />'
+                    f'</a></div>'
+                )
+            if digest:
+                html_parts.append(
+                    f'<p style="color:#333;font-size:15px;line-height:1.8;'
+                    f'margin:0 0 16px">{digest}</p>'
+                )
+            if author:
+                html_parts.append(
+                    f'<p style="color:#888;font-size:13px;margin:0 0 12px">'
+                    f'作者: {author}</p>'
+                )
             html_parts.append(
-                f'<p style="color:#333;font-size:15px;line-height:1.8;'
-                f'margin:0 0 16px">{digest}</p>'
+                f'<p style="margin:0"><a href="{html_escape(link)}" '
+                f'style="color:#1890ff;text-decoration:none;font-size:14px">'
+                f'阅读原文 &rarr;</a></p>'
             )
-        if author:
-            html_parts.append(
-                f'<p style="color:#888;font-size:13px;margin:0 0 12px">'
-                f'作者: {author}</p>'
-            )
-        html_parts.append(
-            f'<p style="margin:0"><a href="{html_escape(link)}" '
-            f'style="color:#1890ff;text-decoration:none;font-size:14px">'
-            f'阅读原文 &rarr;</a></p>'
-        )
-
-        SubElement(item, "description").text = "\n".join(html_parts)
-
-    xml_bytes = tostring(rss, encoding="unicode", xml_declaration=False)
-    return '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_bytes
+        
+        # 使用 CDATA 包裹 HTML 内容
+        description = doc.createElement("description")
+        cdata = doc.createCDATASection("\n".join(html_parts))
+        description.appendChild(cdata)
+        item.appendChild(description)
+        
+        channel.appendChild(item)
+    
+    # 生成 XML 字符串
+    xml_str = doc.toprettyxml(indent="  ", encoding=None)
+    
+    # 移除多余的空行和 XML 声明（我们自己添加）
+    lines = [line for line in xml_str.split('\n') if line.strip()]
+    xml_str = '\n'.join(lines[1:])  # 跳过默认的 XML 声明
+    
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_str
 
 
 @router.get("/rss/{fakeid}", summary="获取 RSS 订阅源",

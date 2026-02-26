@@ -69,6 +69,7 @@ async def get_article(article_request: ArticleRequest, request: Request):
         html = await fetch_page(
             article_request.url,
             extra_headers={"Referer": "https://mp.weixin.qq.com/"},
+            timeout=120  # WeChat 大文章可能超时，延长至 120 秒
         )
 
         if "js_content" not in html:

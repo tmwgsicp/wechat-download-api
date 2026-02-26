@@ -8,12 +8,13 @@
 搜索路由 - FastAPI版本
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel
 from typing import Optional, List
 import time
 import httpx
 from utils.auth_manager import auth_manager
+from utils.image_proxy import proxy_image_url
 
 router = APIRouter()
 
@@ -30,7 +31,7 @@ class SearchResponse(BaseModel):
     error: Optional[str] = None
 
 @router.get("/searchbiz", response_model=SearchResponse, summary="搜索公众号")
-async def search_accounts(query: str = Query(..., description="公众号名称或关键词", alias="query")):
+async def search_accounts(query: str = Query(..., description="公众号名称或关键词", alias="query"), request: Request = None):
     """
     按关键词搜索微信公众号，获取 FakeID。
 
@@ -78,14 +79,19 @@ async def search_accounts(query: str = Query(..., description="公众号名称�
             if result.get("base_resp", {}).get("ret") == 0:
                 accounts = result.get("list", [])
                 
+                # 获取 base_url 用于图片代理
+                base_url = str(request.base_url).rstrip("/") if request else ""
+                
                 # 格式化返回数据
                 formatted_accounts = []
                 for acc in accounts:
+                    # 将头像 URL 转换为代理链接
+                    round_head_img = proxy_image_url(acc.get("round_head_img", ""), base_url)
                     formatted_accounts.append({
                         "fakeid": acc.get("fakeid", ""),
                         "nickname": acc.get("nickname", ""),
                         "alias": acc.get("alias", ""),
-                        "round_head_img": acc.get("round_head_img", ""),
+                        "round_head_img": round_head_img,
                         "service_type": acc.get("service_type", 0)
                     })
                 

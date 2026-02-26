@@ -9,8 +9,10 @@ HTTP 客户端封装
 优先使用 curl_cffi（模拟 Chrome TLS 指纹），不可用时自动降级到 httpx。
 支持代理池轮转：当前代理失败 → 尝试下一个 → 全部失败 → 直连兜底。
 
-注意：curl_cffi 的 AsyncSession 在部分环境下 SOCKS5 代理不工作，
-因此代理场景使用同步 Session + 线程池来规避此问题。
+注意：
+1. curl_cffi 的 AsyncSession 在部分环境下 SOCKS5 代理不工作，
+   因此代理场景使用同步 Session + 线程池来规避此问题。
+2. 优先使用 SOCKS5 代理，避免被封禁。
 """
 
 import asyncio
@@ -86,6 +88,8 @@ async def fetch_page(url: str, extra_headers: Optional[Dict] = None,
 
 async def _do_fetch(url: str, headers: Dict, timeout: int,
                     proxy: Optional[str]) -> str:
+    """执行实际的HTTP请求"""
+    # SOCKS5 代理或无代理：正常请求
     if HAS_CURL_CFFI:
         return await _fetch_curl_cffi(url, headers, timeout, proxy)
     return await _fetch_httpx(url, headers, timeout, proxy)
@@ -103,7 +107,7 @@ async def _fetch_curl_cffi(url: str, headers: Dict, timeout: int,
 def _fetch_curl_cffi_sync(url: str, headers: Dict, timeout: int,
                           proxy: Optional[str]) -> str:
     """同步请求，在线程池中执行。规避 AsyncSession + SOCKS5 代理的兼容性问题。"""
-    kwargs = {"timeout": timeout, "allow_redirects": True}
+    kwargs = {"timeout": timeout, "allow_redirects": True, "verify": False}  # 跳过 SSL 验证
     if proxy:
         kwargs["proxy"] = proxy
     with CurlSession(impersonate="chrome120") as session:

@@ -63,3 +63,6 @@ logs/
 
 # RSS database
 data/
+
+# SaaS 版本（独立仓库管理）
+saas/

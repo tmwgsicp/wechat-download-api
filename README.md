@@ -19,9 +19,9 @@
 
 ## 功能特性
 
-- **RSS 订阅** — 订阅任意公众号，自动定时拉取新文章，生成标准 RSS 2.0 源，接入 FreshRSS / Feedly 等阅读器即可使用
+- **RSS 订阅** — 订阅任意公众号，自动定时拉取新文章（**包含完整文章内容和图片**），生成标准 RSS 2.0 源，接入 FreshRSS / Feedly 等阅读器即可使用
 - **文章内容获取** — 通过 URL 获取文章完整内容（标题、作者、正文 HTML / 纯文本、图片列表）
-- **反风控体系** — Chrome TLS 指纹模拟 + IP 代理池轮转 + 三层自动限频，有效对抗微信封控
+- **反风控体系** — Chrome TLS 指纹模拟 + SOCKS5 代理池轮转 + 三层自动限频，有效对抗微信封控
 - **文章列表 & 搜索** — 获取任意公众号历史文章列表，支持分页和关键词搜索
 - **公众号搜索** — 按名称搜索公众号，获取 FakeID
 - **扫码登录** — 微信公众平台扫码登录，凭证自动保存，4 天有效期
@@ -39,11 +39,19 @@
 
 ---
 
-## SaaS 托管版（即将推出）
+## SaaS 托管版 — 已上线 🚀
 
-不想自己部署？我们正在筹备 **RSS 订阅托管服务**——无需服务器、无需配置，输入公众号名称即可获得 RSS 订阅地址，直接接入你喜欢的 RSS 阅读器。同时也在评估开放文章内容获取 API 的托管方案。
+**不想折腾部署？30 秒注册即可使用** 👉 **[wechatrss.waytomaster.com](https://wechatrss.waytomaster.com)**
 
-感兴趣的话欢迎扫码添加微信，提前锁定体验名额 👇 [联系方式](#联系方式)
+搜索公众号名称，拿到 RSS 链接，丢进你的阅读器——Feedly、Inoreader、NetNewsWire 全部兼容。
+
+| 套餐 | 公众号数量 | 价格 |
+|------|-----------|------|
+| 免费版 | 2 个 | ¥0 |
+| 基础版 | 20 个 | ¥9.9/月 |
+| 专业版 | 50 个 | ¥19.9/月 |
+
+> 免费版够用就一直免费，不够了再升级，没有套路。
 
 ---
 
@@ -57,11 +65,33 @@
 
 登录后即可通过 API 获取**任意公众号**的公开文章（不限于自己的公众号）。
 
+> **本地电脑可以直接使用！** 不需要公网服务器——在本地启动服务后通过 `localhost` 访问即可完成扫码登录和全部功能。只有当你需要从其他设备（如手机 RSS 阅读器）远程访问时，才需要公网服务器或内网穿透。
+
 ---
 
 ## 快速开始
 
-### 方式一：一键启动（推荐）
+### 方式一：Docker 部署（推荐，适合 NAS）
+
+**最简单的部署方式，适用于群晖 NAS、威联通 NAS、服务器等环境。**
+
+```bash
+# 克隆项目
+git clone https://github.com/tmwgsicp/wechat-download-api.git
+cd wechat-download-api
+
+# 配置环境变量（可选）
+cp env.example .env
+
+# 启动服务
+docker-compose up -d
+```
+
+服务启动后访问 http://your-ip:5000 即可使用。
+
+> 详细的 Docker 部署指南（包括群晖 NAS 图形界面操作）请查看 **[DOCKER.md](DOCKER.md)**
+
+### 方式二：一键启动脚本
 
 **Windows：**
 ```bash
@@ -78,7 +108,7 @@ chmod +x start.sh
 
 > Linux 生产环境可使用 `sudo bash start.sh` 自动配置 systemd 服务和开机自启。
 
-### 方式二：手动安装
+### 方式三：手动安装
 
 ```bash
 # 创建虚拟环境
@@ -101,6 +131,64 @@ python app.py
 | http://localhost:5000/login.html | 扫码登录 |
 | http://localhost:5000/api/docs | Swagger API 文档 |
 | http://localhost:5000/api/health | 健康检查 |
+
+---
+
+## 服务器部署
+
+### Docker 部署（推荐）
+
+适用于各类服务器、NAS 等环境，零依赖、易维护。详见 **[DOCKER.md](DOCKER.md)**
+
+### Linux 生产环境（systemd）
+
+`start.sh` 脚本在 Linux 上以 `sudo` 运行时，会自动注册 systemd 服务并启用开机自启：
+
+```bash
+sudo bash start.sh
+```
+
+之后可通过以下命令管理服务：
+
+```bash
+# 查看运行状态
+bash status.sh
+
+# 停止服务
+bash stop.sh
+
+# 手动操作
+sudo systemctl restart wechat-download-api
+sudo systemctl status wechat-download-api
+```
+
+### 配置反向代理（可选）
+
+如需通过域名或 HTTPS 访问，配置 Nginx 反向代理到 `localhost:5000`：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+### 环境变量
+
+复制 `env.example` 为 `.env` 并按需修改：
+
+```bash
+cp env.example .env
+```
+
+主要配置项参见 `env.example` 中的注释说明。
 
 ---
 
@@ -208,6 +296,12 @@ curl "http://localhost:5000/api/rss/MzA1MjM1ODk2MA=="
 
 也可以通过管理面板的 **RSS 订阅** 页面可视化管理，搜索公众号一键订阅并复制 RSS 地址。
 
+> **关于 RSS 内容**: RSS 源包含**完整文章内容**（图文混排），您可以直接在 RSS 阅读器中阅读全文。
+>
+> 系统使用 **SOCKS5 代理池 + Chrome TLS 指纹模拟**技术获取文章内容，有效规避微信风控。
+>
+> 扫码登录后，系统会**自动**将微信凭证用于内容获取，无需手动配置。如需禁用完整内容获取（仅保留标题和摘要），可在 `.env` 中设置 `RSS_FETCH_FULL_CONTENT=false`。
+
 #### RSS 订阅管理接口
 
 | 方法 | 路径 | 说明 |
@@ -255,14 +349,26 @@ cp env.example .env
 | `RATE_LIMIT_PER_IP` | 单 IP 每分钟请求上限 | 5 |
 | `RATE_LIMIT_ARTICLE_INTERVAL` | 文章请求最小间隔（秒） | 3 |
 | `RSS_POLL_INTERVAL` | RSS 轮询间隔（秒） | 3600 |
-| `PROXY_URLS` | 代理池地址（多个逗号分隔，留空直连） | 空 |
+| `RSS_FETCH_FULL_CONTENT` | RSS 是否获取完整内容（true/false） | true |
+| `PROXY_URLS` | **SOCKS5 代理池地址（强烈建议配置，避免账号风控）** | 空 |
+| `SITE_URL` | **网站访问地址（用于RSS图片代理，必须配置）** | http://localhost:5000 |
 | `PORT` | 服务端口 | 5000 |
 | `HOST` | 监听地址 | 0.0.0.0 |
 | `DEBUG` | 调试模式（开启热重载） | false |
 
-### 代理池配置（可选）
+> **⚠️ 重要**: `SITE_URL` 必须配置为实际访问地址（IP或域名），否则RSS图片无法正常显示。例如：
+> - 本地开发: `http://localhost:5000`
+> - 局域网部署: `http://192.168.1.100:5000`
+> - 公网域名: `https://你的域名.com`
 
-文章内容获取接口（`POST /api/article`）会访问微信文章页面，频繁请求可能触发微信验证码保护。配置代理池可以将请求分散到不同 IP，降低风控风险。
+### SOCKS5 代理池配置（⚠️ 强烈建议）
+
+**重要提示**: 
+- ⚠️ **启用完整内容获取时，强烈建议配置代理池，避免账号被微信风控**
+- ⚠️ **不配置代理直连微信可能导致：频繁验证、账号限制、IP封禁**
+- ✅ **配置2-3个代理IP可有效分散请求，降低风控风险**
+
+**用途**：获取文章完整内容时分散请求 IP，配合 Chrome TLS 指纹模拟，有效规避微信风控。
 
 > 本项目使用 `curl_cffi` 模拟 Chrome TLS 指纹，请求特征与真实浏览器一致，配合代理池效果更佳。
 
@@ -370,6 +476,9 @@ PROXY_URLS=socks5://myuser:mypass@vps1-ip:1080,socks5://myuser:mypass@vps2-ip:10
 │   ├── rate_limiter.py   # 限频器
 │   ├── rss_store.py      # RSS 数据存储（SQLite）
 │   ├── rss_poller.py     # RSS 后台轮询器
+│   ├── content_processor.py  # 内容处理与图片代理
+│   ├── image_proxy.py    # 图片URL代理工具
+│   ├── article_fetcher.py    # 批量并发获取文章
 │   └── webhook.py        # Webhook 通知
 └── static/               # 前端页面（含 RSS 管理）
 ```
@@ -476,6 +585,8 @@ Cookie 登录有效期约 4 天，过期后需重新扫码登录。配置 `WEBHO
 </table>
 
 - **GitHub Issues**: [提交问题](https://github.com/tmwgsicp/wechat-download-api/issues)
+- **邮箱**: creator@waytomaster.com
+- **SaaS 托管版**: [wechatrss.waytomaster.com](https://wechatrss.waytomaster.com)
 
 ---
 
