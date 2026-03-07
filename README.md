@@ -71,59 +71,32 @@
 
 ## 快速开始
 
-### 方式一：Docker 部署（推荐，适合 NAS）
-
-**最简单的部署方式，适用于群晖 NAS、威联通 NAS、服务器等环境。**
+**第一步：克隆项目**
 
 ```bash
-# 克隆项目
 git clone https://github.com/tmwgsicp/wechat-download-api.git
 cd wechat-download-api
-
-# 配置环境变量（可选）
-cp env.example .env
-
-# 启动服务
-docker-compose up -d
 ```
 
-服务启动后访问 http://your-ip:5000 即可使用。
+**第二步：一键启动**
 
-> 详细的 Docker 部署指南（包括群晖 NAS 图形界面操作）请查看 **[DOCKER.md](DOCKER.md)**
-
-### 方式二：一键启动脚本
-
-**Windows：**
 ```bash
-start.bat
-```
-
-**Linux / macOS：**
-```bash
-chmod +x start.sh
-./start.sh
+bash start.sh  # Linux/macOS
+# 或
+start.bat      # Windows
 ```
 
 脚本会自动完成环境检查、虚拟环境创建、依赖安装和服务启动。
 
-> Linux 生产环境可使用 `sudo bash start.sh` 自动配置 systemd 服务和开机自启。
+**第三步：扫码登录**
 
-### 方式三：手动安装
+访问 `http://localhost:5000/login.html`，用**公众号管理员微信**扫码登录。
 
-```bash
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Linux/macOS
-# venv\Scripts\activate   # Windows
+---
 
-# 安装依赖
-pip install -r requirements.txt
+## API 使用
 
-# 启动
-python app.py
-```
-
-### 访问服务
+### 访问地址
 
 | 地址 | 说明 |
 |------|------|
@@ -135,10 +108,6 @@ python app.py
 ---
 
 ## 服务器部署
-
-### Docker 部署（推荐）
-
-适用于各类服务器、NAS 等环境，零依赖、易维护。详见 **[DOCKER.md](DOCKER.md)**
 
 ### Linux 生产环境（systemd）
 
