@@ -405,7 +405,28 @@
         </div>
 
         <div class="sub-section">
-            <h2>我的订阅</h2>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-md);">
+                <h2 style="margin-bottom:0;">我的订阅</h2>
+                <div style="display:flex;gap:var(--space-sm);position:relative;">
+                    <div id="exportDropdown" style="position:relative;">
+                        <button class="btn-sm" onclick="toggleExportMenu()">导出</button>
+                        <div id="exportMenu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--bg-primary);border:1px solid var(--border-base);border-radius:var(--radius-base);box-shadow:var(--shadow-base);z-index:10;min-width:120px;">
+                            <div style="padding:8px 16px;cursor:pointer;font-size:var(--font-sm);transition:background var(--duration-fast);" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''" onclick="doExport('csv')">CSV</div>
+                            <div style="padding:8px 16px;cursor:pointer;font-size:var(--font-sm);transition:background var(--duration-fast);" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''" onclick="doExport('opml')">OPML</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="aggRssBar" style="display:none;background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:var(--radius-base);padding:12px var(--space-md);margin-bottom:var(--space-md);">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:var(--font-xs);font-weight:600;color:var(--text-secondary);margin-bottom:4px;">聚合 RSS 链接</div>
+                        <div id="aggRssUrl" style="font-size:var(--font-xs);color:var(--text-muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+                    </div>
+                    <button class="btn-copy" onclick="copyRss(document.getElementById('aggRssUrl').textContent)">复制</button>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">包含所有订阅的公众号文章，订阅变动自动生效，无需更换链接</div>
+            </div>
             <div id="subList"><div class="sub-empty">加载中...</div></div>
         </div>
 
@@ -454,8 +475,10 @@
                 var d = await res.json();
                 if (!d.success || !d.data || d.data.length === 0) {
                     el.innerHTML = '<div class="sub-empty">暂无订阅，搜索公众号后添加</div>';
+                    updateAggRssBar(false);
                     return;
                 }
+                updateAggRssBar(true);
                 var html = '<ul class="sub-list">';
                 d.data.forEach(function(s) {
                     var lastPoll = s.last_poll ? new Date(s.last_poll * 1000).toLocaleString('zh-CN') : '从未';
@@ -476,6 +499,7 @@
                 el.innerHTML = html;
             } catch (e) {
                 el.innerHTML = '<div class="sub-empty">加载失败: ' + e.message + '</div>';
+                updateAggRssBar(false);
             }
         }
 
@@ -602,6 +626,34 @@
         function escAttr(s) {
             return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
         }
+
+        function updateAggRssBar(hasSubs) {
+            var bar = document.getElementById('aggRssBar');
+            if (hasSubs) {
+                var url = window.location.origin + '/api/rss/all';
+                document.getElementById('aggRssUrl').textContent = url;
+                bar.style.display = 'block';
+            } else {
+                bar.style.display = 'none';
+            }
+        }
+
+        function toggleExportMenu() {
+            var menu = document.getElementById('exportMenu');
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function doExport(format) {
+            document.getElementById('exportMenu').style.display = 'none';
+            window.location.href = '/api/rss/export?format=' + format;
+        }
+
+        document.addEventListener('click', function(e) {
+            var dd = document.getElementById('exportDropdown');
+            if (dd && !dd.contains(e.target)) {
+                document.getElementById('exportMenu').style.display = 'none';
+            }
+        });
 
         document.getElementById('searchInput').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') doSearch();

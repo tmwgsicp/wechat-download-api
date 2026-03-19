@@ -190,3 +190,16 @@ def get_all_fakeids() -> List[str]:
         conn.close()
 
 
+def get_all_articles(limit: int = 50) -> List[Dict]:
+    """Get latest articles across all subscriptions, sorted by publish_time desc."""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM articles ORDER BY publish_time DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
