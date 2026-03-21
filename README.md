@@ -131,6 +131,79 @@ sudo systemctl restart wechat-download-api
 sudo systemctl status wechat-download-api
 ```
 
+### Docker 部署
+
+使用 Docker 可以快速部署服务，无需手动配置 Python 环境：
+
+**第一步：构建镜像**
+
+```bash
+docker build -t wechat-download-api .
+```
+
+**第二步：运行容器**
+
+```bash
+docker run -d \
+  -p 5000:5000 \
+  -v $(pwd)/data:/app/data \
+  -e SITE_URL=http://your-domain.com \
+  --name wechat-api \
+  wechat-download-api
+```
+
+**第三步：扫码登录**
+
+访问 `http://your-domain.com:5000/login.html` 完成登录。
+
+**管理容器：**
+
+```bash
+# 查看日志
+docker logs -f wechat-api
+
+# 停止容器
+docker stop wechat-api
+
+# 启动容器
+docker start wechat-api
+
+# 重启容器
+docker restart wechat-api
+
+# 删除容器
+docker rm wechat-api
+```
+
+**环境变量配置：**
+
+可以通过 `-e` 参数传递环境变量：
+
+```bash
+docker run -d \
+  -p 5000:5000 \
+  -v $(pwd)/data:/app/data \
+  -e SITE_URL=http://your-domain.com \
+  -e PROXY_URLS=socks5://user:pass@proxy1:1080,socks5://user:pass@proxy2:1080 \
+  -e RSS_POLL_INTERVAL=3600 \
+  -e DEBUG=false \
+  --name wechat-api \
+  wechat-download-api
+```
+
+**使用 .env 文件：**
+
+```bash
+docker run -d \
+  -p 5000:5000 \
+  -v $(pwd)/data:/app/data \
+  --env-file .env \
+  --name wechat-api \
+  wechat-download-api
+```
+
+> **注意**：`data` 目录会挂载到容器中，确保 SQLite 数据库持久化。
+
 ### 配置反向代理（可选）
 
 如需通过域名或 HTTPS 访问，配置 Nginx 反向代理到 `localhost:5000`：
