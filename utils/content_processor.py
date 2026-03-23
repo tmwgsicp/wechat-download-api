@@ -100,12 +100,25 @@ def extract_content(html: str) -> str:
     Extract article body, trying multiple container patterns.
     Different WeChat account types (government, media, personal) use
     different HTML structures. We try them in order of specificity.
-    For image-text messages (item_show_type=8), delegates to helpers.
+    For image-text messages (item_show_type=8) and short posts (item_show_type=10),
+    delegates to helpers.
     """
-    from utils.helpers import is_image_text_message, _extract_image_text_content
+    from utils.helpers import (
+        is_image_text_message, _extract_image_text_content,
+        is_short_content_message, _extract_short_content,
+        is_audio_message, _extract_audio_content,
+    )
 
     if is_image_text_message(html):
         result = _extract_image_text_content(html)
+        return result.get('content', '')
+
+    if is_short_content_message(html):
+        result = _extract_short_content(html)
+        return result.get('content', '')
+
+    if is_audio_message(html):
+        result = _extract_audio_content(html)
         return result.get('content', '')
 
     # Pattern 1: id="js_content" (most common)

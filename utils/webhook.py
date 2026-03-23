@@ -22,6 +22,7 @@ EVENT_LABELS = {
     "login_success": "登录成功",
     "login_expired": "登录过期",
     "verification_required": "触发验证",
+    "content_fetch_failed": "文章内容获取失败",
 }
 
 

@@ -35,6 +35,7 @@ venv.bak/
 .vscode/
 .idea/
 .cursor/
+.claude/
 *.swp
 *.swo
 *~

@@ -20,13 +20,13 @@ import httpx
 
 from utils.auth_manager import auth_manager
 from utils import rss_store
-from utils.helpers import extract_article_info, parse_article_url, is_image_text_message, has_article_content
+from utils.helpers import extract_article_info, parse_article_url, is_image_text_message, has_article_content, is_article_unavailable, get_unavailable_reason
 from utils.http_client import fetch_page
 
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL = int(os.getenv("RSS_POLL_INTERVAL", "3600"))
-ARTICLES_PER_POLL = 10
+ARTICLES_PER_POLL = int(os.getenv("ARTICLES_PER_POLL", "10"))
 FETCH_FULL_CONTENT = os.getenv("RSS_FETCH_FULL_CONTENT", "true").lower() == "true"
 
 
@@ -207,10 +207,9 @@ class RSSPoller:
         wechat_token = os.getenv("WECHAT_TOKEN", "")
         wechat_cookie = os.getenv("WECHAT_COOKIE", "")
         
-        # 批量并发获取（max_concurrency=5，传递微信凭证）
         results = await fetch_articles_batch(
             article_links, 
-            max_concurrency=5, 
+            max_concurrency=3, 
             timeout=60,
             wechat_token=wechat_token,
             wechat_cookie=wechat_cookie
@@ -225,7 +224,18 @@ class RSSPoller:
                 continue
             
             html = results.get(link)
-            if not html or not has_article_content(html):
+            if not html:
+                logger.warning("Empty HTML: %s", link[:80])
+                enriched.append(article)
+                continue
+            if is_article_unavailable(html):
+                reason = get_unavailable_reason(html) or "unknown"
+                logger.warning("Article permanently unavailable (%s): %s", reason, link[:80])
+                article["content"] = f"<p>[unavailable] {reason}</p>"
+                article["plain_content"] = f"[unavailable] {reason}"
+                enriched.append(article)
+                continue
+            if not has_article_content(html):
                 logger.warning("No content in HTML: %s", link[:80])
                 enriched.append(article)
                 continue
