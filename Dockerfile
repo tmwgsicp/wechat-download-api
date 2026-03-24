@@ -21,15 +21,14 @@ FROM python:3.11-slim
 
 LABEL maintainer="tmwgsicp"
 LABEL description="WeChat Official Account Article Download API with RSS Support"
-LABEL version="1.0.0"
+LABEL version="1.0.3"
 
 WORKDIR /app
 
 # Install runtime dependencies (curl for healthcheck)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd -m -u 1000 appuser
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy wheels from builder and install
 COPY --from=builder /app/wheels /wheels
@@ -38,11 +37,8 @@ RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 # Copy application code
 COPY . .
 
-# Create data directory for SQLite and set permissions
-RUN mkdir -p /app/data && chown -R appuser:appuser /app
-
-# Switch to non-root user
-USER appuser
+# Create data directory
+RUN mkdir -p /app/data
 
 # Environment variables with sensible defaults
 ENV PYTHONUNBUFFERED=1 \
