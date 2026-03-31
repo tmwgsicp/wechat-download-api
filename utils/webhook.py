@@ -21,6 +21,8 @@ logger = logging.getLogger("webhook")
 EVENT_LABELS = {
     "login_success": "登录成功",
     "login_expired": "登录过期",
+    "login_expiring_soon": "登录即将过期",
+    "login_expiring_critical": "登录即将过期（紧急）",
     "verification_required": "触发验证",
     "content_fetch_failed": "文章内容获取失败",
 }

@@ -59,7 +59,14 @@ async def lifespan(app: FastAPI):
 
     init_db()
     await rss_poller.start()
+    
+    # 启动登录过期提醒器（自动检测凭证有效期并 webhook 通知）
+    from utils.login_reminder import login_reminder
+    await login_reminder.start()
+    
     yield
+    
+    await login_reminder.stop()
     await rss_poller.stop()
 
 

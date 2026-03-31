@@ -27,7 +27,7 @@
 - **公众号搜索** — 按名称搜索公众号，获取 FakeID
 - **扫码登录** — 微信公众平台扫码登录，凭证自动保存，4 天有效期
 - **图片代理** — 代理微信 CDN 图片，解决防盗链问题
-- **Webhook 通知** — 登录过期、触发验证等事件自动推送（支持企业微信机器人）
+- **Webhook 通知** — 登录过期提醒（提前24h/6h预警+已过期通知）、触发验证等事件自动推送（支持企业微信机器人）
 - **API 文档** — 自动生成 Swagger UI / ReDoc，在线调试所有接口
 
 <div align="center">
@@ -361,7 +361,9 @@ cp env.example .env
 | `WECHAT_TOKEN` | 微信 Token（登录后自动填充） | - |
 | `WECHAT_COOKIE` | 微信 Cookie（登录后自动填充） | - |
 | `WECHAT_FAKEID` | 公众号 FakeID（登录后自动填充） | - |
-| `WEBHOOK_URL` | Webhook 通知地址（可选） | 空 |
+| `WECHAT_EXPIRE_TIME` | 凭证过期时间（登录后自动填充） | - |
+| `WEBHOOK_URL` | Webhook 通知地址（支持企业微信机器人） | 空 |
+| `WEBHOOK_NOTIFICATION_INTERVAL` | 同一事件通知最小间隔（秒） | 300 |
 | `RATE_LIMIT_GLOBAL` | 全局每分钟请求上限 | 10 |
 | `RATE_LIMIT_PER_IP` | 单 IP 每分钟请求上限 | 5 |
 | `RATE_LIMIT_ARTICLE_INTERVAL` | 文章请求最小间隔（秒） | 3 |
@@ -493,6 +495,7 @@ PROXY_URLS=socks5://myuser:mypass@vps1-ip:1080,socks5://myuser:mypass@vps2-ip:10
 │   ├── rate_limiter.py   # 限频器
 │   ├── rss_store.py      # RSS 数据存储（SQLite）
 │   ├── rss_poller.py     # RSS 后台轮询器
+│   ├── login_reminder.py # 登录过期提醒（主动检测）
 │   ├── content_processor.py  # 内容处理与图片代理
 │   ├── image_proxy.py    # 图片URL代理工具
 │   ├── article_fetcher.py    # 批量并发获取文章
@@ -540,9 +543,14 @@ PROXY_URLS=socks5://myuser:mypass@vps1-ip:1080,socks5://myuser:mypass@vps2-ip:10
 </details>
 
 <details>
-<summary><b>Token 多久过期</b></summary>
+<summary><b>Token 多久过期？如何提前知道？</b></summary>
 
-Cookie 登录有效期约 4 天，过期后需重新扫码登录。配置 `WEBHOOK_URL` 可以在过期时收到通知。
+Cookie 登录有效期约 4 天，系统会：
+1. 前端显示到期时间（`/api/admin/status` 接口返回 `expireTime` 和 `isExpired` 字段）
+2. **后台每 6 小时主动检测**，提前 24h / 6h 通过 Webhook 预警
+3. 过期后立即通过 Webhook 通知
+
+配置 `WEBHOOK_URL`（支持企业微信群机器人）可收到实时提醒，避免因凭证过期导致 RSS 轮询失败或搜索功能不可用。
 </details>
 
 <details>

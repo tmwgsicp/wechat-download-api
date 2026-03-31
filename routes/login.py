@@ -497,8 +497,8 @@ async def biz_login(request: Request):
                 import traceback
                 traceback.print_exc()
         
-        # 计算过期时间（30天后）
-        expire_time = int((time.time() + 30 * 24 * 3600) * 1000)
+        # 计算过期时间（4天后，与微信实际有效期一致）
+        expire_time = int((time.time() + 4 * 24 * 3600) * 1000)
         
         # 保存凭证
         auth_manager.save_credentials(
