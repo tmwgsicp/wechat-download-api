@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>黑名单管理 - WeChat Download API</title>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --success-color: #52c41a;
+            --warning-color: #fa8c16;
+            --error-color: #ff4d4f;
+            --text-primary: #262626;
+            --text-secondary: #595959;
+            --text-muted: #8c8c8c;
+            --bg-primary: #ffffff;
+            --bg-secondary: #fafafa;
+            --border-light: #f0f0f0;
+            --border-base: #d9d9d9;
+            --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.06);
+            --shadow-base: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --radius-small: 4px;
+            --radius-base: 8px;
+            --radius-large: 12px;
+            --font-xs: 12px;
+            --font-sm: 14px;
+            --font-base: 16px;
+            --font-lg: 20px;
+            --font-xl: 24px;
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            --duration-fast: 200ms;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .layout {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: var(--space-xl) var(--space-lg);
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-xl);
+        }
+        .header-left h1 { font-size: var(--font-xl); font-weight: 700; }
+        .header-left p { font-size: var(--font-sm); color: var(--text-secondary); margin-top: var(--space-xs); }
+        .btn-sm {
+            padding: 6px 16px;
+            border-radius: var(--radius-base);
+            font-size: var(--font-xs);
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border-base);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            transition: all var(--duration-fast);
+        }
+        .btn-sm:hover { border-color: var(--primary-color); color: var(--primary-color); }
+        .btn-sm.btn-primary { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+        .btn-sm.btn-primary:hover { background: #096dd9; }
+        .btn-sm.btn-danger { border-color: var(--error-color); color: var(--error-color); }
+        .btn-sm.btn-danger:hover { background: var(--error-color); color: #fff; }
+
+        .section {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-large);
+            box-shadow: var(--shadow-light);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-lg);
+        }
+        .section h2 { font-size: var(--font-base); font-weight: 600; margin-bottom: var(--space-md); }
+
+        .add-row {
+            display: flex;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-md);
+        }
+        .add-row input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid var(--border-base);
+            border-radius: var(--radius-base);
+            font-size: var(--font-sm);
+            outline: none;
+        }
+        .add-row input:focus { border-color: var(--primary-color); }
+        .btn { padding: 10px 24px; border: none; border-radius: var(--radius-base); font-size: var(--font-sm); font-weight: 600; cursor: pointer; }
+        .btn-primary { background: var(--primary-color); color: #fff; }
+        .btn-primary:hover { background: #096dd9; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border-light); }
+        th { font-size: var(--font-xs); color: var(--text-muted); font-weight: 600; }
+        td { font-size: var(--font-sm); }
+        .status-active { color: var(--error-color); font-weight: 600; }
+        .status-removed { color: var(--text-muted); }
+        .empty { text-align: center; padding: var(--space-xl); color: var(--text-muted); }
+
+        .toast {
+            position: fixed; top: 24px; left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: var(--text-primary); color: #fff;
+            padding: 10px 24px; border-radius: var(--radius-base);
+            font-size: var(--font-sm); z-index: 1000;
+            transition: transform 0.3s ease; pointer-events: none;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+
+        .footer {
+            margin-top: var(--space-xl);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--border-light);
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--font-xs);
+            color: var(--text-muted);
+        }
+        .footer a { color: var(--text-muted); text-decoration: none; }
+        .footer a:hover { color: var(--primary-color); }
+        .footer-links { display: flex; gap: var(--space-md); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <div class="header">
+            <div class="header-left">
+                <h1>黑名单管理</h1>
+                <p>管理高频触发验证码的公众号，黑名单中的公众号将跳过轮询</p>
+            </div>
+            <a href="/admin.html" class="btn-sm">返回面板</a>
+        </div>
+
+        <div class="section">
+            <h2>添加黑名单</h2>
+            <div class="add-row">
+                <input type="text" id="fakeidInput" placeholder="输入公众号 FakeID">
+                <input type="text" id="nicknameInput" placeholder="公众号名称（可选）" style="max-width:200px;">
+                <button class="btn btn-primary" onclick="addToBlacklist()">添加</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>黑名单列表</h2>
+            <div id="listContainer"><div class="empty">加载中...</div></div>
+        </div>
+
+        <div class="footer">
+            <span>WeChat Download API</span>
+            <div class="footer-links">
+                <a href="/admin.html">管理面板</a>
+                <a href="/rss.html">RSS 订阅</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        function showToast(msg) {
+            var t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            clearTimeout(t._timer);
+            t._timer = setTimeout(function() { t.classList.remove('show'); }, 2000);
+        }
+
+        async function loadBlacklist() {
+            var el = document.getElementById('listContainer');
+            try {
+                var res = await fetch('/api/admin/blacklist');
+                var d = await res.json();
+                if (!d.blacklist || d.blacklist.length === 0) {
+                    el.innerHTML = '<div class="empty">暂无黑名单记录</div>';
+                    return;
+                }
+                var html = '<table><thead><tr><th>公众号</th><th>FakeID</th><th>原因</th><th>触发次数</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>';
+                d.blacklist.forEach(function(item) {
+                    var status = item.is_active ? '<span class="status-active">生效中</span>' : '<span class="status-removed">已移除</span>';
+                    var time = new Date(item.blacklisted_at * 1000).toLocaleString('zh-CN');
+                    var reason = item.reason === 'high_verification' ? '高频验证' : '手动添加';
+                    html += '<tr>';
+                    html += '<td>' + escHtml(item.nickname || '-') + '</td>';
+                    html += '<td style="font-family:monospace;font-size:11px;">' + escHtml(item.fakeid.substring(0, 12)) + '...</td>';
+                    html += '<td>' + reason + '</td>';
+                    html += '<td>' + item.verification_count + '</td>';
+                    html += '<td>' + status + '</td>';
+                    html += '<td style="font-size:12px;">' + time + '</td>';
+                    html += '<td>';
+                    if (item.is_active) {
+                        html += '<button class="btn-sm" onclick="removeFromBlacklist(\'' + escAttr(item.fakeid) + '\')">移除</button>';
+                    } else {
+                        html += '<button class="btn-sm btn-danger" onclick="deleteRecord(' + item.id + ')">删除</button>';
+                    }
+                    html += '</td></tr>';
+                });
+                html += '</tbody></table>';
+                el.innerHTML = html;
+            } catch (e) {
+                el.innerHTML = '<div class="empty">加载失败: ' + e.message + '</div>';
+            }
+        }
+
+        async function addToBlacklist() {
+            var fakeid = document.getElementById('fakeidInput').value.trim();
+            var nickname = document.getElementById('nicknameInput').value.trim();
+            if (!fakeid) { showToast('请输入 FakeID'); return; }
+            try {
+                var res = await fetch('/api/admin/blacklist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fakeid: fakeid, nickname: nickname, reason: 'manual' })
+                });
+                var d = await res.json();
+                showToast(d.message || (d.success ? '添加成功' : '添加失败'));
+                if (d.success) {
+                    document.getElementById('fakeidInput').value = '';
+                    document.getElementById('nicknameInput').value = '';
+                    loadBlacklist();
+                }
+            } catch (e) {
+                showToast('网络错误: ' + e.message);
+            }
+        }
+
+        async function removeFromBlacklist(fakeid) {
+            if (!confirm('确定从黑名单移除？移除后该公众号将恢复正常轮询。')) return;
+            try {
+                var res = await fetch('/api/admin/blacklist/' + encodeURIComponent(fakeid), { method: 'DELETE' });
+                var d = await res.json();
+                showToast(d.message || (d.success ? '已移除' : '操作失败'));
+                loadBlacklist();
+            } catch (e) {
+                showToast('网络错误: ' + e.message);
+            }
+        }
+
+        async function deleteRecord(id) {
+            if (!confirm('确定永久删除此记录？')) return;
+            try {
+                var res = await fetch('/api/admin/blacklist/record/' + id, { method: 'DELETE' });
+                var d = await res.json();
+                showToast(d.message || (d.success ? '已删除' : '操作失败'));
+                loadBlacklist();
+            } catch (e) {
+                showToast('网络错误: ' + e.message);
+            }
+        }
+
+        function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        function escAttr(s) { return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+        window.addEventListener('load', loadBlacklist);
+    </script>
+</body>
+</html>

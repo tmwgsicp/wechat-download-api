@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>历史文章获取 - WeChat Download API</title>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --success-color: #52c41a;
+            --warning-color: #fa8c16;
+            --error-color: #ff4d4f;
+            --text-primary: #262626;
+            --text-secondary: #595959;
+            --text-muted: #8c8c8c;
+            --bg-primary: #ffffff;
+            --bg-secondary: #fafafa;
+            --border-light: #f0f0f0;
+            --border-base: #d9d9d9;
+            --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.06);
+            --radius-base: 8px;
+            --radius-large: 12px;
+            --font-xs: 12px;
+            --font-sm: 14px;
+            --font-base: 16px;
+            --font-xl: 24px;
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            --duration-fast: 200ms;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .layout { max-width: 1080px; margin: 0 auto; padding: var(--space-xl) var(--space-lg); }
+        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-xl); }
+        .header-left h1 { font-size: var(--font-xl); font-weight: 700; }
+        .header-left p { font-size: var(--font-sm); color: var(--text-secondary); margin-top: var(--space-xs); }
+        .btn-sm {
+            padding: 6px 16px;
+            border-radius: var(--radius-base);
+            font-size: var(--font-xs);
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border-base);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            transition: all var(--duration-fast);
+        }
+        .btn-sm:hover { border-color: var(--primary-color); color: var(--primary-color); }
+
+        .section {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-large);
+            box-shadow: var(--shadow-light);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-lg);
+        }
+        .section h2 { font-size: var(--font-base); font-weight: 600; margin-bottom: var(--space-md); }
+
+        .form-row { display: flex; gap: var(--space-sm); margin-bottom: var(--space-md); align-items: center; flex-wrap: wrap; }
+        .form-row label { font-size: var(--font-sm); color: var(--text-secondary); min-width: 80px; }
+        .form-row select, .form-row input {
+            padding: 10px 14px;
+            border: 1px solid var(--border-base);
+            border-radius: var(--radius-base);
+            font-size: var(--font-sm);
+            outline: none;
+            min-width: 200px;
+        }
+        .form-row select:focus, .form-row input:focus { border-color: var(--primary-color); }
+        .btn { padding: 10px 24px; border: none; border-radius: var(--radius-base); font-size: var(--font-sm); font-weight: 600; cursor: pointer; }
+        .btn-primary { background: var(--primary-color); color: #fff; }
+        .btn-primary:hover { background: #096dd9; }
+        .btn-primary:disabled { background: var(--border-base); cursor: not-allowed; }
+
+        .tip {
+            margin-top: var(--space-sm);
+            padding: 10px 14px;
+            background: rgba(250, 140, 22, 0.06);
+            border-left: 3px solid var(--warning-color);
+            border-radius: 0 var(--radius-base) var(--radius-base) 0;
+            font-size: var(--font-xs);
+            color: var(--text-secondary);
+            line-height: 1.8;
+        }
+
+        .result {
+            margin-top: var(--space-md);
+            padding: var(--space-md);
+            border-radius: var(--radius-base);
+            font-size: var(--font-sm);
+            display: none;
+        }
+        .result.visible { display: block; }
+        .result.success { background: rgba(82, 196, 26, 0.1); border: 1px solid var(--success-color); color: var(--success-color); }
+        .result.error { background: rgba(255, 77, 79, 0.1); border: 1px solid var(--error-color); color: var(--error-color); }
+        .result.loading { background: var(--bg-secondary); border: 1px solid var(--border-light); color: var(--text-secondary); }
+
+        .sub-list { list-style: none; max-height: 300px; overflow-y: auto; }
+        .sub-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid var(--border-light);
+            cursor: pointer;
+            transition: background var(--duration-fast);
+        }
+        .sub-item:hover { background: var(--bg-secondary); }
+        .sub-item.selected { background: rgba(24, 144, 255, 0.1); border-left: 3px solid var(--primary-color); }
+        .sub-item img { width: 40px; height: 40px; border-radius: 50%; margin-right: var(--space-md); background: var(--border-light); }
+        .sub-item-info { flex: 1; }
+        .sub-item-info .name { font-size: var(--font-sm); font-weight: 600; }
+        .sub-item-info .meta { font-size: var(--font-xs); color: var(--text-muted); margin-top: 2px; }
+        .empty { text-align: center; padding: var(--space-xl); color: var(--text-muted); }
+
+        .toast {
+            position: fixed; top: 24px; left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: var(--text-primary); color: #fff;
+            padding: 10px 24px; border-radius: var(--radius-base);
+            font-size: var(--font-sm); z-index: 1000;
+            transition: transform 0.3s ease; pointer-events: none;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+
+        .footer {
+            margin-top: var(--space-xl);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--border-light);
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--font-xs);
+            color: var(--text-muted);
+        }
+        .footer a { color: var(--text-muted); text-decoration: none; }
+        .footer a:hover { color: var(--primary-color); }
+        .footer-links { display: flex; gap: var(--space-md); }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--border-light);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <div class="header">
+            <div class="header-left">
+                <h1>历史文章获取</h1>
+                <p>获取公众号的历史文章并存入本地数据库</p>
+            </div>
+            <a href="/admin.html" class="btn-sm">返回面板</a>
+        </div>
+
+        <div class="section">
+            <h2>选择公众号</h2>
+            <div id="subListContainer"><div class="empty">加载中...</div></div>
+        </div>
+
+        <div class="section">
+            <h2>获取设置</h2>
+            <div class="form-row">
+                <label>已选公众号</label>
+                <input type="text" id="selectedName" readonly placeholder="请先选择公众号" style="flex:1;">
+            </div>
+            <div class="form-row">
+                <label>获取数量</label>
+                <select id="countSelect">
+                    <option value="20">20 篇</option>
+                    <option value="50" selected>50 篇</option>
+                    <option value="100">100 篇</option>
+                    <option value="150">150 篇</option>
+                    <option value="200">200 篇</option>
+                </select>
+                <button class="btn btn-primary" id="fetchBtn" onclick="fetchHistory()" disabled>开始获取</button>
+            </div>
+            <div class="tip">
+                <strong>注意事项：</strong><br>
+                1. 程序会自动控制请求间隔，避免触发风控<br>
+                2. 如果触发验证码，请暂停操作并到验证页面处理<br>
+                3. 已存在的文章会自动跳过，不会重复存储
+            </div>
+            <div class="result" id="resultBox"></div>
+        </div>
+
+        <div class="footer">
+            <span>WeChat Download API</span>
+            <div class="footer-links">
+                <a href="/admin.html">管理面板</a>
+                <a href="/rss.html">RSS 订阅</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        var selectedFakeid = '';
+        var selectedNickname = '';
+
+        function showToast(msg) {
+            var t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            clearTimeout(t._timer);
+            t._timer = setTimeout(function() { t.classList.remove('show'); }, 2000);
+        }
+
+        async function loadSubscriptions() {
+            var el = document.getElementById('subListContainer');
+            try {
+                var res = await fetch('/api/rss/subscriptions');
+                var d = await res.json();
+                if (!d.success || !d.data || d.data.length === 0) {
+                    el.innerHTML = '<div class="empty">暂无订阅，请先在 RSS 订阅页面添加公众号</div>';
+                    return;
+                }
+                var html = '<ul class="sub-list">';
+                d.data.forEach(function(s) {
+                    html += '<li class="sub-item" data-fakeid="' + escAttr(s.fakeid) + '" data-nickname="' + escAttr(s.nickname || s.fakeid) + '" onclick="selectSub(this)">';
+                    html += '<img src="' + (s.head_img || '') + '" alt="" onerror="this.style.display=\'none\'">';
+                    html += '<div class="sub-item-info">';
+                    html += '<div class="name">' + escHtml(s.nickname || s.fakeid) + '</div>';
+                    html += '<div class="meta">' + s.article_count + ' 篇文章</div>';
+                    html += '</div></li>';
+                });
+                html += '</ul>';
+                el.innerHTML = html;
+            } catch (e) {
+                el.innerHTML = '<div class="empty">加载失败: ' + e.message + '</div>';
+            }
+        }
+
+        function selectSub(el) {
+            document.querySelectorAll('.sub-item').forEach(function(item) {
+                item.classList.remove('selected');
+            });
+            el.classList.add('selected');
+            selectedFakeid = el.dataset.fakeid;
+            selectedNickname = el.dataset.nickname;
+            document.getElementById('selectedName').value = selectedNickname;
+            document.getElementById('fetchBtn').disabled = false;
+        }
+
+        async function fetchHistory() {
+            if (!selectedFakeid) {
+                showToast('请先选择公众号');
+                return;
+            }
+            
+            var btn = document.getElementById('fetchBtn');
+            var resultBox = document.getElementById('resultBox');
+            var count = parseInt(document.getElementById('countSelect').value);
+            
+            btn.disabled = true;
+            btn.textContent = '获取中...';
+            resultBox.className = 'result visible loading';
+            resultBox.innerHTML = '<span class="loading-spinner"></span>正在获取历史文章，请耐心等待...';
+            
+            try {
+                var res = await fetch('/api/admin/history/fetch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fakeid: selectedFakeid, count: count })
+                });
+                var d = await res.json();
+                
+                if (d.success) {
+                    resultBox.className = 'result visible success';
+                    resultBox.innerHTML = d.message + '<br>获取: ' + d.fetched_count + ' 篇，新增: ' + d.new_count + ' 篇';
+                    showToast('获取完成');
+                    loadSubscriptions();
+                } else {
+                    resultBox.className = 'result visible error';
+                    resultBox.textContent = d.message || '获取失败';
+                }
+            } catch (e) {
+                resultBox.className = 'result visible error';
+                resultBox.textContent = '网络错误: ' + e.message;
+            }
+            
+            btn.disabled = false;
+            btn.textContent = '开始获取';
+        }
+
+        function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        function escAttr(s) { return (s || '').replace(/"/g, '&quot;'); }
+
+        window.addEventListener('load', loadSubscriptions);
+    </script>
+</body>
+</html>

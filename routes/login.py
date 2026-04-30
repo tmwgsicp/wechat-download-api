@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Copyright (C) 2026 tmwgsicp
 # Licensed under the GNU Affero General Public License v3.0
@@ -79,11 +79,11 @@ async def create_session(sessionid: str, request: Request):
     - **sessionid**: 会话标识，由前端生成
     """
     try:
-        # 🔍 调试：输出请求信息
+        # [SEARCH] 调试：输出请求信息
         cookie_header = request.headers.get("cookie", "")
-        print(f"🔍 [DEBUG] 创建Session - Cookie: {cookie_header[:100]}..." if len(cookie_header) > 100 else f"🔍 [DEBUG] 创建Session - Cookie: {cookie_header}")
+        print(f"[DEBUG] 创建Session - Cookie: {cookie_header[:100]}..." if len(cookie_header) > 100 else f"[DEBUG] 创建Session - Cookie: {cookie_header}")
         
-        # ⭐ 关键：调用bizlogin而不是scanloginqrcode！
+        # [*] 关键：调用bizlogin而不是scanloginqrcode！
         body = {
             "userlang": "zh_CN",
             "redirect_url": "",
@@ -97,10 +97,10 @@ async def create_session(sessionid: str, request: Request):
         
         response = await proxy_wx_request(
             request,
-            BIZ_LOGIN_ENDPOINT,  # ⭐ 使用bizlogin
+            BIZ_LOGIN_ENDPOINT,  # [*] 使用bizlogin
             params={"action": "startlogin"},
             method="POST",
-            data=body  # ⭐ 传递body
+            data=body  # [*] 传递body
         )
         
         # 存储session
@@ -111,17 +111,17 @@ async def create_session(sessionid: str, request: Request):
         
         data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {"base_resp": {"ret": 0}}
         
-        # 🔍 调试：输出响应详情
-        print(f"🔍 [DEBUG] Session响应状态码: {response.status_code}")
-        print(f"🔍 [DEBUG] Session响应数据: {data}")
-        print(f"🔍 [DEBUG] Session响应 Set-Cookie 数量: {len(response.headers.get_list('set-cookie'))}")
+        # [SEARCH] 调试：输出响应详情
+        print(f"[DEBUG] Session响应状态码: {response.status_code}")
+        print(f"[DEBUG] Session响应数据: {data}")
+        print(f"[DEBUG] Session响应 Set-Cookie 数量: {len(response.headers.get_list('set-cookie'))}")
         for i, cookie in enumerate(response.headers.get_list("set-cookie")):
-            print(f"🔍 [DEBUG] Cookie [{i}]: {cookie[:150]}..." if len(cookie) > 150 else f"🔍 [DEBUG] Cookie [{i}]: {cookie}")
+            print(f"[DEBUG] Cookie [{i}]: {cookie[:150]}..." if len(cookie) > 150 else f"[DEBUG] Cookie [{i}]: {cookie}")
         
         # 转发Set-Cookie（智能处理Secure标志）
         response_obj = JSONResponse(content=data)
         
-        # 🔍 检测是否使用 HTTPS（支持反向代理）
+        # [SEARCH] 检测是否使用 HTTPS（支持反向代理）
         is_https = (
             request.url.scheme == "https" or 
             request.headers.get("x-forwarded-proto") == "https" or
@@ -129,24 +129,24 @@ async def create_session(sessionid: str, request: Request):
         )
         
         if is_https:
-            print(f"🔒 检测到HTTPS环境，Cookie将保留Secure标志（安全传输）")
+            print(f"[HTTPS] 检测到HTTPS环境，Cookie将保留Secure标志（安全传输）")
         else:
-            print(f"⚠️ 检测到HTTP环境，Cookie将移除Secure标志（兼容模式，生产环境建议使用HTTPS）")
+            print(f"[WARN] 检测到HTTP环境，Cookie将移除Secure标志（兼容模式，生产环境建议使用HTTPS）")
         
         for cookie_str in response.headers.get_list("set-cookie"):
             if not is_https:
-                # 🔧 HTTP模式：移除Secure标志以支持HTTP传输
+                # [FIX] HTTP模式：移除Secure标志以支持HTTP传输
                 modified_cookie = cookie_str.replace("; Secure", "")
                 response_obj.headers.append("Set-Cookie", modified_cookie)
             else:
-                # 🔒 HTTPS模式：保留Secure标志，保持安全性
+                # [HTTPS] HTTPS模式：保留Secure标志，保持安全性
                 response_obj.headers.append("Set-Cookie", cookie_str)
         
-        print(f"✅ 创建session: {sessionid}, 响应: {data}")
+        print(f"[OK] 创建session: {sessionid}, 响应: {data}")
         return response_obj
         
     except Exception as e:
-        print(f"❌ 创建session失败: {str(e)}")
+        print(f"[ERROR] session failed: {str(e)}")
         import traceback
         traceback.print_exc()
         return JSONResponse(content={"base_resp": {"ret": 0}})  # 返回成功避免前端报错
@@ -159,9 +159,9 @@ async def get_qrcode(request: Request):
     **返回：** 二维码图片（PNG/JPEG 格式）
     """
     try:
-        # 🔍 调试：输出请求信息
+        # [SEARCH] 调试：输出请求信息
         cookie_header = request.headers.get("cookie", "")
-        print(f"🔍 [DEBUG] 二维码请求 Cookie: {cookie_header[:100]}..." if len(cookie_header) > 100 else f"🔍 [DEBUG] 二维码请求 Cookie: {cookie_header}")
+        print(f"[DEBUG] 二维码请求 Cookie: {cookie_header[:100]}..." if len(cookie_header) > 100 else f"[DEBUG] 二维码请求 Cookie: {cookie_header}")
         
         # 代理请求到微信
         response = await proxy_wx_request(
@@ -173,11 +173,11 @@ async def get_qrcode(request: Request):
             }
         )
         
-        # 🔍 调试：输出响应信息
-        print(f"🔍 [DEBUG] 微信响应状态码: {response.status_code}")
-        print(f"🔍 [DEBUG] 微信响应 Content-Type: {response.headers.get('content-type', 'N/A')}")
-        print(f"🔍 [DEBUG] 微信响应内容长度: {len(response.content)} 字节")
-        print(f"🔍 [DEBUG] 微信响应 Set-Cookie: {response.headers.get('set-cookie', 'N/A')}")
+        # [SEARCH] 调试：输出响应信息
+        print(f"[DEBUG] 微信响应状态码: {response.status_code}")
+        print(f"[DEBUG] 微信响应 Content-Type: {response.headers.get('content-type', 'N/A')}")
+        print(f"[DEBUG] 微信响应内容长度: {len(response.content)} 字节")
+        print(f"[DEBUG] 微信响应 Set-Cookie: {response.headers.get('set-cookie', 'N/A')}")
         
         # 检查响应类型
         content_type = response.headers.get("content-type", "")
@@ -192,13 +192,13 @@ async def get_qrcode(request: Request):
         if not is_image:
             try:
                 error_data = response.json()
-                print(f"⚠️ 二维码接口返回JSON: {error_data}")
+                print(f"[WARN] 二维码接口返回JSON: {error_data}")
                 return JSONResponse(
                     status_code=400,
                     content={"error": "需要先调用 /session/{sessionid} 创建会话", "detail": error_data}
                 )
             except:
-                print(f"⚠️ 二维码接口返回非图片内容: {content_type}")
+                print(f"[WARN] 二维码接口返回非图片内容: {content_type}")
                 print(f"响应内容前20字节: {content[:20]}")
                 return JSONResponse(
                     status_code=400,
@@ -208,14 +208,14 @@ async def get_qrcode(request: Request):
         # 确定正确的媒体类型
         if is_png:
             media_type = "image/png"
-            print(f"✅ 获取到PNG格式二维码")
+            print(f"[OK] 获取到PNG格式二维码")
         elif is_jpeg:
             media_type = "image/jpeg"
-            print(f"✅ 获取到JPEG格式二维码")
+            print(f"[OK] 获取到JPEG格式二维码")
         else:
             # 使用响应头中的类型
             media_type = content_type if "image" in content_type else "image/png"
-            print(f"✅ 获取到二维码，类型: {media_type}")
+            print(f"[OK] 获取到二维码，类型: {media_type}")
         
         # 可选：保存二维码到本地（用于调试）
         import os
@@ -229,7 +229,7 @@ async def get_qrcode(request: Request):
         
         with open(qrcode_path, "wb") as f:
             f.write(content)
-        print(f"💾 二维码已保存到: {qrcode_path}")
+        print(f"[SAVE] 二维码已保存到: {qrcode_path}")
         
         # 构建响应,转发Set-Cookie
         response_obj = Response(
@@ -251,23 +251,23 @@ async def get_qrcode(request: Request):
         
         for cookie_str in response.headers.get_list("set-cookie"):
             if not is_https:
-                # 🔧 HTTP模式：移除Secure标志
+                # [FIX] HTTP模式：移除Secure标志
                 modified_cookie = cookie_str.replace("; Secure", "")
                 response_obj.headers.append("Set-Cookie", modified_cookie)
             else:
-                # 🔒 HTTPS模式：保留Secure标志
+                # [HTTPS] HTTPS模式：保留Secure标志
                 response_obj.headers.append("Set-Cookie", cookie_str)
         
         return response_obj
     
     except httpx.HTTPStatusError as e:
-        print(f"❌ HTTP错误: {e.response.status_code}, 内容: {e.response.text[:200]}")
+        print(f"[ERROR] HTTP: {e.response.status_code}, content: {e.response.text[:200]}")
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"获取二维码失败: {e.response.status_code}"
         )
     except Exception as e:
-        print(f"❌ 获取二维码异常: {str(e)}")
+        print(f"[ERROR] QR code error: {str(e)}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"获取二维码失败: {str(e)}")
@@ -299,14 +299,14 @@ async def check_scan_status(request: Request):
         
         # 记录状态用于调试
         if data.get("base_resp", {}).get("ret") != 0:
-            print(f"⚠️ 扫码状态检查失败: ret={data.get('base_resp', {}).get('ret')}")
+            print(f"[WARN] 扫码状态检查失败: ret={data.get('base_resp', {}).get('ret')}")
         else:
             status = data.get("status", 0)
             if status == 1:  # 登录成功
-                print(f"🎉 用户已确认登录! status=1")
+                print(f"[SUCCESS] 用户已确认登录! status=1")
             elif status in [4, 6]:  # 已扫码
                 acct_size = data.get("acct_size", 0)
-                print(f"✅ 用户已扫码, status={status}, acct_size={acct_size}")
+                print(f"[OK] 用户已扫码, status={status}, acct_size={acct_size}")
         
         # 转发Set-Cookie到浏览器（智能处理Secure标志）
         response_obj = JSONResponse(content=data)
@@ -319,11 +319,11 @@ async def check_scan_status(request: Request):
         
         for cookie_str in response.headers.get_list("set-cookie"):
             if not is_https:
-                # 🔧 HTTP模式：移除Secure标志
+                # [FIX] HTTP模式：移除Secure标志
                 modified_cookie = cookie_str.replace("; Secure", "")
                 response_obj.headers.append("Set-Cookie", modified_cookie)
             else:
-                # 🔒 HTTPS模式：保留Secure标志
+                # [HTTPS] HTTPS模式：保留Secure标志
                 response_obj.headers.append("Set-Cookie", cookie_str)
         
         return response_obj
@@ -334,7 +334,7 @@ async def check_scan_status(request: Request):
             detail=f"检查扫码状态失败: {e.response.status_code}"
         )
     except Exception as e:
-        print(f"❌ 检查扫码状态异常: {str(e)}")
+        print(f"[ERROR] scan status error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"检查扫码状态失败: {str(e)}")
 
 @router.post("/bizlogin", summary="完成登录", include_in_schema=True)
@@ -365,19 +365,19 @@ async def biz_login(request: Request):
             BIZ_LOGIN_ENDPOINT,
             params={"action": "login"},
             method="POST",
-            data=login_data  # ⭐ 修复变量名
+            data=login_data  # [*] 修复变量名
         )
         response.raise_for_status()
         
         # 解析响应
         result = response.json()
         
-        print(f"📍 Bizlogin响应: base_resp.ret={result.get('base_resp', {}).get('ret')}")
+        print(f"[INFO] Bizlogin响应: base_resp.ret={result.get('base_resp', {}).get('ret')}")
         
         # 检查登录是否成功
         if result.get("base_resp", {}).get("ret") != 0:
             error_msg = result.get("base_resp", {}).get("err_msg", "登录失败")
-            print(f"❌ 微信返回错误: {error_msg}")
+            print(f"[ERROR] WeChat error: {error_msg}")
             return JSONResponse(
                 status_code=400,
                 content={"success": False, "error": error_msg}
@@ -386,7 +386,7 @@ async def biz_login(request: Request):
         # 获取redirect_url中的token
         redirect_url = result.get("redirect_url", "")
         if not redirect_url:
-            print(f"❌ 未获取到redirect_url，完整响应: {result}")
+            print(f"[ERROR] no redirect_url, response: {result}")
             return JSONResponse(
                 status_code=400,
                 content={"success": False, "error": "未获取到登录凭证"}
@@ -398,7 +398,7 @@ async def biz_login(request: Request):
         token = parse_qs(parsed.query).get("token", [""])[0]
         
         if not token:
-            print(f"❌ 未获取到Token，redirect_url: {redirect_url}")
+            print(f"[ERROR] no Token, redirect_url: {redirect_url}")
             return JSONResponse(
                 status_code=400,
                 content={"success": False, "error": "未获取到Token"}
@@ -445,7 +445,7 @@ async def biz_login(request: Request):
                 nickname = nick_match.group(1)
             
             # 第二步：通过昵称搜索获取FakeID
-            print(f"🔍 开始获取FakeID，昵称: {nickname}")
+            print(f"[SEARCH] 开始获取FakeID，昵称: {nickname}")
             
             try:
                 search_response = await client.get(
@@ -464,13 +464,13 @@ async def biz_login(request: Request):
                     headers=common_headers
                 )
                 
-                print(f"📡 搜索API响应状态: {search_response.status_code}")
+                print(f"[API] 搜索API响应状态: {search_response.status_code}")
                 search_result = search_response.json()
-                print(f"📡 搜索结果: {search_result}")
+                print(f"[API] 搜索结果: {search_result}")
                 
                 if search_result.get("base_resp", {}).get("ret") == 0:
                     accounts = search_result.get("list", [])
-                    print(f"📋 找到 {len(accounts)} 个公众号")
+                    print(f"[LIST] 找到 {len(accounts)} 个公众号")
                     
                     for account in accounts:
                         acc_nickname = account.get("nickname", "")
@@ -479,21 +479,21 @@ async def biz_login(request: Request):
                         
                         if acc_nickname == nickname:
                             fakeid = acc_fakeid
-                            print(f"✅ 匹配成功，FakeID: {fakeid}")
+                            print(f"[OK] 匹配成功，FakeID: {fakeid}")
                             break
                     
                     if not fakeid:
-                        print(f"⚠️ 未找到完全匹配的公众号，尝试使用第一个结果")
+                        print(f"[WARN] 未找到完全匹配的公众号，尝试使用第一个结果")
                         if accounts:
                             fakeid = accounts[0].get("fakeid", "")
-                            print(f"📝 使用第一个公众号的FakeID: {fakeid}")
+                            print(f"[NOTE] 使用第一个公众号的FakeID: {fakeid}")
                 else:
                     ret = search_result.get("base_resp", {}).get("ret")
                     err_msg = search_result.get("base_resp", {}).get("err_msg", "未知错误")
-                    print(f"❌ 搜索API返回错误: ret={ret}, err_msg={err_msg}")
+                    print(f"[ERROR] Search API error: ret={ret}, err_msg={err_msg}")
                     
             except Exception as e:
-                print(f"❌ 获取FakeID失败: {str(e)}")
+                print(f"[ERROR] FakeID error: {str(e)}")
                 import traceback
                 traceback.print_exc()
         
@@ -509,7 +509,7 @@ async def biz_login(request: Request):
             expire_time=expire_time
         )
         
-        print(f"✅ 登录成功: {nickname} (fakeid: {fakeid})")
+        print(f"[OK] 登录成功: {nickname} (fakeid: {fakeid})")
         print(f"   Token: {token[:20]}...")
         print(f"   Cookie已保存到.env")
         

@@ -35,39 +35,10 @@ def _get_conn() -> sqlite3.Connection:
 def init_db():
     """建表（幂等）"""
     conn = _get_conn()
+    
+    # 先创建不依赖其他表的基础表
     conn.executescript("""
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            fakeid      TEXT PRIMARY KEY,
-            nickname    TEXT NOT NULL DEFAULT '',
-            alias       TEXT NOT NULL DEFAULT '',
-            head_img    TEXT NOT NULL DEFAULT '',
-            category_id INTEGER DEFAULT NULL,
-            created_at  INTEGER NOT NULL,
-            last_poll   INTEGER NOT NULL DEFAULT 0,
-            FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS articles (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            fakeid      TEXT NOT NULL,
-            aid         TEXT NOT NULL DEFAULT '',
-            title       TEXT NOT NULL DEFAULT '',
-            link        TEXT NOT NULL DEFAULT '',
-            digest      TEXT NOT NULL DEFAULT '',
-            cover       TEXT NOT NULL DEFAULT '',
-            author      TEXT NOT NULL DEFAULT '',
-            content     TEXT NOT NULL DEFAULT '',
-            plain_content TEXT NOT NULL DEFAULT '',
-            publish_time INTEGER NOT NULL DEFAULT 0,
-            fetched_at  INTEGER NOT NULL,
-            UNIQUE(fakeid, link),
-            FOREIGN KEY (fakeid) REFERENCES subscriptions(fakeid) ON DELETE CASCADE
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_articles_fakeid_time
-            ON articles(fakeid, publish_time DESC);
-        
-        -- 分类表
+        -- 分类表（先创建，因为 subscriptions 依赖它）
         CREATE TABLE IF NOT EXISTS categories (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             name        TEXT NOT NULL UNIQUE,
@@ -91,6 +62,61 @@ def init_db():
         );
         
         CREATE INDEX IF NOT EXISTS idx_blacklist_active ON fakeid_blacklist(is_active);
+    """)
+    conn.commit()
+    
+    # 检查 subscriptions 表是否存在
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='subscriptions'"
+    )
+    table_exists = cursor.fetchone() is not None
+    
+    if table_exists:
+        # 表已存在，检查是否有 category_id 列
+        cursor = conn.execute("PRAGMA table_info(subscriptions)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "category_id" not in columns:
+            # 添加 category_id 列
+            conn.execute("ALTER TABLE subscriptions ADD COLUMN category_id INTEGER DEFAULT NULL")
+            conn.commit()
+            logger.info("Added category_id column to subscriptions table")
+    else:
+        # 表不存在，创建新表
+        conn.executescript("""
+            CREATE TABLE subscriptions (
+                fakeid      TEXT PRIMARY KEY,
+                nickname    TEXT NOT NULL DEFAULT '',
+                alias       TEXT NOT NULL DEFAULT '',
+                head_img    TEXT NOT NULL DEFAULT '',
+                category_id INTEGER DEFAULT NULL,
+                created_at  INTEGER NOT NULL,
+                last_poll   INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+            );
+        """)
+        conn.commit()
+    
+    # 创建 articles 表
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS articles (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            fakeid      TEXT NOT NULL,
+            aid         TEXT NOT NULL DEFAULT '',
+            title       TEXT NOT NULL DEFAULT '',
+            link        TEXT NOT NULL DEFAULT '',
+            digest      TEXT NOT NULL DEFAULT '',
+            cover       TEXT NOT NULL DEFAULT '',
+            author      TEXT NOT NULL DEFAULT '',
+            content     TEXT NOT NULL DEFAULT '',
+            plain_content TEXT NOT NULL DEFAULT '',
+            publish_time INTEGER NOT NULL DEFAULT 0,
+            fetched_at  INTEGER NOT NULL,
+            UNIQUE(fakeid, link),
+            FOREIGN KEY (fakeid) REFERENCES subscriptions(fakeid) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_articles_fakeid_time
+            ON articles(fakeid, publish_time DESC);
         CREATE INDEX IF NOT EXISTS idx_subscriptions_category ON subscriptions(category_id);
     """)
     conn.commit()
@@ -129,9 +155,11 @@ def list_subscriptions() -> List[Dict]:
     conn = _get_conn()
     try:
         rows = conn.execute(
-            "SELECT s.*, "
+            "SELECT s.*, c.name AS category_name, "
             "(SELECT COUNT(*) FROM articles a WHERE a.fakeid=s.fakeid) AS article_count "
-            "FROM subscriptions s ORDER BY s.created_at DESC"
+            "FROM subscriptions s "
+            "LEFT JOIN categories c ON s.category_id = c.id "
+            "ORDER BY s.created_at DESC"
         ).fetchall()
         return [dict(r) for r in rows]
     finally:

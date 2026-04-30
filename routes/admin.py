@@ -241,3 +241,175 @@ async def set_subscription_category(fakeid: str, req: SetCategoryRequest):
     if success:
         return {"success": True, "message": "分类已设置"}
     raise HTTPException(status_code=404, detail="订阅不存在")
+
+
+# ── 历史文章获取 ─────────────────────────────────────────────
+
+class FetchHistoryRequest(BaseModel):
+    fakeid: str = Field(..., description="公众号ID")
+    count: int = Field(50, ge=10, le=200, description="获取数量，10-200篇")
+
+
+class FetchHistoryResponse(BaseModel):
+    success: bool
+    message: str
+    fetched_count: int = 0
+    new_count: int = 0
+
+
+@router.post("/history/fetch", response_model=FetchHistoryResponse, summary="获取历史文章")
+async def fetch_history_articles(req: FetchHistoryRequest):
+    """
+    获取公众号的历史文章并存入数据库。
+    简化版：直接调用微信 API 获取历史文章列表，不涉及用户权限和付费逻辑。
+    """
+    from utils.auth_manager import auth_manager
+    from utils.rss_poller import poller
+    
+    # 检查登录状态
+    status = auth_manager.get_status()
+    if not status.get("authenticated"):
+        return FetchHistoryResponse(
+            success=False,
+            message="未登录，请先扫码登录",
+            fetched_count=0,
+            new_count=0
+        )
+    
+    # 检查订阅是否存在
+    subscriptions = rss_store.list_subscriptions()
+    sub = next((s for s in subscriptions if s["fakeid"] == req.fakeid), None)
+    if not sub:
+        return FetchHistoryResponse(
+            success=False,
+            message="订阅不存在，请先添加订阅",
+            fetched_count=0,
+            new_count=0
+        )
+    
+    try:
+        # 调用 poller 的内部方法获取文章列表
+        fetched_count, new_count = await _fetch_history_internal(
+            fakeid=req.fakeid,
+            target_count=req.count
+        )
+        
+        return FetchHistoryResponse(
+            success=True,
+            message=f"获取完成，共获取 {fetched_count} 篇，新增 {new_count} 篇",
+            fetched_count=fetched_count,
+            new_count=new_count
+        )
+    except Exception as e:
+        return FetchHistoryResponse(
+            success=False,
+            message=f"获取失败: {str(e)}",
+            fetched_count=0,
+            new_count=0
+        )
+
+
+async def _fetch_history_internal(fakeid: str, target_count: int) -> tuple:
+    """
+    内部历史文章获取逻辑。
+    返回 (fetched_count, new_count)。
+    """
+    import httpx
+    import json
+    import asyncio
+    import random
+    
+    creds = auth_manager.get_credentials()
+    if not creds or not creds.get("token"):
+        raise ValueError("登录凭证无效")
+    
+    all_articles = []
+    batch_size = 10
+    batches_needed = (target_count + batch_size - 1) // batch_size
+    
+    for batch_num in range(batches_needed):
+        begin = batch_num * batch_size
+        
+        params = {
+            "begin": begin,
+            "count": batch_size,
+            "fakeid": fakeid,
+            "type": "101_1",
+            "free_publish_type": 1,
+            "sub_action": "list_ex",
+            "token": creds["token"],
+            "lang": "zh_CN",
+            "f": "json",
+            "ajax": 1,
+        }
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://mp.weixin.qq.com/",
+            "Cookie": creds["cookie"],
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                "https://mp.weixin.qq.com/cgi-bin/appmsgpublish",
+                params=params,
+                headers=headers,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+        
+        base_resp = result.get("base_resp", {})
+        ret_code = base_resp.get("ret", -1)
+        
+        if ret_code == 200003:
+            raise ValueError("触发验证码，请稍后重试")
+        if ret_code != 0:
+            raise ValueError(f"微信API错误: ret={ret_code}")
+        
+        publish_page = result.get("publish_page", {})
+        if isinstance(publish_page, str):
+            try:
+                publish_page = json.loads(publish_page)
+            except (json.JSONDecodeError, ValueError):
+                continue
+        
+        if not isinstance(publish_page, dict):
+            continue
+        
+        batch_articles = []
+        for item in publish_page.get("publish_list", []):
+            publish_info = item.get("publish_info", {})
+            if isinstance(publish_info, str):
+                try:
+                    publish_info = json.loads(publish_info)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+            if not isinstance(publish_info, dict):
+                continue
+            for a in publish_info.get("appmsgex", []):
+                batch_articles.append({
+                    "aid": a.get("aid", ""),
+                    "title": a.get("title", ""),
+                    "link": a.get("link", ""),
+                    "digest": a.get("digest", ""),
+                    "cover": a.get("cover", ""),
+                    "author": a.get("author", ""),
+                    "publish_time": a.get("update_time", 0),
+                })
+        
+        all_articles.extend(batch_articles)
+        
+        # 检查是否已获取足够数量或没有更多文章
+        if len(batch_articles) < batch_size or len(all_articles) >= target_count:
+            break
+        
+        # 延迟避免频繁请求
+        if batch_num < batches_needed - 1:
+            await asyncio.sleep(random.uniform(2, 4))
+    
+    # 截取到目标数量
+    all_articles = all_articles[:target_count]
+    
+    # 保存到数据库（使用 save_articles 批量保存）
+    new_count = rss_store.save_articles(fakeid, all_articles)
+    
+    return len(all_articles), new_count

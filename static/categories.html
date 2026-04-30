@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分类管理 - WeChat Download API</title>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --success-color: #52c41a;
+            --warning-color: #fa8c16;
+            --error-color: #ff4d4f;
+            --text-primary: #262626;
+            --text-secondary: #595959;
+            --text-muted: #8c8c8c;
+            --bg-primary: #ffffff;
+            --bg-secondary: #fafafa;
+            --border-light: #f0f0f0;
+            --border-base: #d9d9d9;
+            --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.06);
+            --shadow-base: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --radius-small: 4px;
+            --radius-base: 8px;
+            --radius-large: 12px;
+            --font-xs: 12px;
+            --font-sm: 14px;
+            --font-base: 16px;
+            --font-lg: 20px;
+            --font-xl: 24px;
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            --duration-fast: 200ms;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .layout { max-width: 1080px; margin: 0 auto; padding: var(--space-xl) var(--space-lg); }
+        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-xl); }
+        .header-left h1 { font-size: var(--font-xl); font-weight: 700; }
+        .header-left p { font-size: var(--font-sm); color: var(--text-secondary); margin-top: var(--space-xs); }
+        .btn-sm {
+            padding: 6px 16px;
+            border-radius: var(--radius-base);
+            font-size: var(--font-xs);
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border-base);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            transition: all var(--duration-fast);
+        }
+        .btn-sm:hover { border-color: var(--primary-color); color: var(--primary-color); }
+        .btn-sm.btn-primary { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+        .btn-sm.btn-danger { border-color: var(--error-color); color: var(--error-color); }
+        .btn-sm.btn-danger:hover { background: var(--error-color); color: #fff; }
+
+        .section {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-large);
+            box-shadow: var(--shadow-light);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-lg);
+        }
+        .section h2 { font-size: var(--font-base); font-weight: 600; margin-bottom: var(--space-md); }
+
+        .add-row { display: flex; gap: var(--space-sm); margin-bottom: var(--space-md); flex-wrap: wrap; }
+        .add-row input, .add-row select {
+            padding: 10px 14px;
+            border: 1px solid var(--border-base);
+            border-radius: var(--radius-base);
+            font-size: var(--font-sm);
+            outline: none;
+        }
+        .add-row input:focus { border-color: var(--primary-color); }
+        .btn { padding: 10px 24px; border: none; border-radius: var(--radius-base); font-size: var(--font-sm); font-weight: 600; cursor: pointer; }
+        .btn-primary { background: var(--primary-color); color: #fff; }
+        .btn-primary:hover { background: #096dd9; }
+
+        .category-list { display: grid; gap: var(--space-md); }
+        .category-card {
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-base);
+            padding: var(--space-md);
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+        .category-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .category-info { flex: 1; min-width: 0; }
+        .category-name { font-weight: 600; font-size: var(--font-sm); }
+        .category-desc { font-size: var(--font-xs); color: var(--text-muted); margin-top: 2px; }
+        .category-meta { font-size: var(--font-xs); color: var(--text-muted); margin-top: 4px; }
+        .category-actions { display: flex; gap: var(--space-sm); flex-shrink: 0; }
+        .rss-url { font-family: monospace; font-size: 11px; color: var(--text-muted); word-break: break-all; margin-top: 4px; }
+        .empty { text-align: center; padding: var(--space-xl); color: var(--text-muted); }
+
+        .toast {
+            position: fixed; top: 24px; left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: var(--text-primary); color: #fff;
+            padding: 10px 24px; border-radius: var(--radius-base);
+            font-size: var(--font-sm); z-index: 1000;
+            transition: transform 0.3s ease; pointer-events: none;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+
+        .footer {
+            margin-top: var(--space-xl);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--border-light);
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--font-xs);
+            color: var(--text-muted);
+        }
+        .footer a { color: var(--text-muted); text-decoration: none; }
+        .footer a:hover { color: var(--primary-color); }
+        .footer-links { display: flex; gap: var(--space-md); }
+
+        .color-options { display: flex; gap: var(--space-xs); }
+        .color-opt {
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all var(--duration-fast);
+        }
+        .color-opt:hover, .color-opt.selected { border-color: var(--text-primary); transform: scale(1.1); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <div class="header">
+            <div class="header-left">
+                <h1>分类管理</h1>
+                <p>创建分类并将订阅分组，每个分类生成独立的 RSS 聚合链接</p>
+            </div>
+            <a href="/admin.html" class="btn-sm">返回面板</a>
+        </div>
+
+        <div class="section">
+            <h2>创建分类</h2>
+            <div class="add-row">
+                <input type="text" id="nameInput" placeholder="分类名称" style="width:160px;">
+                <input type="text" id="descInput" placeholder="描述（可选）" style="flex:1;">
+                <div class="color-options" id="colorPicker">
+                    <div class="color-opt selected" data-color="#1890ff" style="background:#1890ff;"></div>
+                    <div class="color-opt" data-color="#52c41a" style="background:#52c41a;"></div>
+                    <div class="color-opt" data-color="#fa8c16" style="background:#fa8c16;"></div>
+                    <div class="color-opt" data-color="#ff4d4f" style="background:#ff4d4f;"></div>
+                    <div class="color-opt" data-color="#722ed1" style="background:#722ed1;"></div>
+                    <div class="color-opt" data-color="#13c2c2" style="background:#13c2c2;"></div>
+                </div>
+                <button class="btn btn-primary" onclick="createCategory()">创建</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>分类列表</h2>
+            <div id="categoryList" class="category-list"><div class="empty">加载中...</div></div>
+        </div>
+
+        <div class="footer">
+            <span>WeChat Download API</span>
+            <div class="footer-links">
+                <a href="/admin.html">管理面板</a>
+                <a href="/rss.html">RSS 订阅</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        var selectedColor = '#1890ff';
+
+        document.getElementById('colorPicker').addEventListener('click', function(e) {
+            if (e.target.classList.contains('color-opt')) {
+                document.querySelectorAll('.color-opt').forEach(function(el) { el.classList.remove('selected'); });
+                e.target.classList.add('selected');
+                selectedColor = e.target.dataset.color;
+            }
+        });
+
+        function showToast(msg) {
+            var t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            clearTimeout(t._timer);
+            t._timer = setTimeout(function() { t.classList.remove('show'); }, 2000);
+        }
+
+        async function loadCategories() {
+            var el = document.getElementById('categoryList');
+            try {
+                var res = await fetch('/api/admin/categories');
+                var d = await res.json();
+                if (!d.categories || d.categories.length === 0) {
+                    el.innerHTML = '<div class="empty">暂无分类，请先创建</div>';
+                    return;
+                }
+                var html = '';
+                d.categories.forEach(function(cat) {
+                    var rssUrl = window.location.origin + '/api/rss/category/' + cat.id;
+                    html += '<div class="category-card">';
+                    html += '<div class="category-color" style="background:' + (cat.color || '#1890ff') + ';"></div>';
+                    html += '<div class="category-info">';
+                    html += '<div class="category-name">' + escHtml(cat.name) + '</div>';
+                    if (cat.description) html += '<div class="category-desc">' + escHtml(cat.description) + '</div>';
+                    html += '<div class="category-meta">' + cat.subscription_count + ' 个订阅</div>';
+                    html += '<div class="rss-url">RSS: ' + rssUrl + '</div>';
+                    html += '</div>';
+                    html += '<div class="category-actions">';
+                    html += '<button class="btn-sm" onclick="copyRss(\'' + rssUrl + '\')">复制 RSS</button>';
+                    html += '<button class="btn-sm btn-danger" onclick="deleteCategory(' + cat.id + ')">删除</button>';
+                    html += '</div></div>';
+                });
+                el.innerHTML = html;
+            } catch (e) {
+                el.innerHTML = '<div class="empty">加载失败: ' + e.message + '</div>';
+            }
+        }
+
+        async function createCategory() {
+            var name = document.getElementById('nameInput').value.trim();
+            var desc = document.getElementById('descInput').value.trim();
+            if (!name) { showToast('请输入分类名称'); return; }
+            try {
+                var res = await fetch('/api/admin/categories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, description: desc, color: selectedColor })
+                });
+                var d = await res.json();
+                showToast(d.message || (d.success ? '创建成功' : '创建失败'));
+                if (d.success) {
+                    document.getElementById('nameInput').value = '';
+                    document.getElementById('descInput').value = '';
+                    loadCategories();
+                }
+            } catch (e) {
+                showToast('网络错误: ' + e.message);
+            }
+        }
+
+        async function deleteCategory(id) {
+            if (!confirm('确定删除此分类？分类下的订阅不会被删除，仅取消分类关联。')) return;
+            try {
+                var res = await fetch('/api/admin/categories/' + id, { method: 'DELETE' });
+                var d = await res.json();
+                showToast(d.message || (d.success ? '已删除' : '操作失败'));
+                loadCategories();
+            } catch (e) {
+                showToast('网络错误: ' + e.message);
+            }
+        }
+
+        function copyRss(url) {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(url).then(function() { showToast('RSS 地址已复制'); });
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = url;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                showToast('RSS 地址已复制');
+            }
+        }
+
+        function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        window.addEventListener('load', loadCategories);
+    </script>
+</body>
+</html>

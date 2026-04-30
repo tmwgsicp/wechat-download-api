@@ -125,7 +125,7 @@ async def search_accounts(query: str = Query(..., description="公众号名称�
                 )
                 
     except Exception as e:
-        print(f"❌ 搜索公众号失败: {str(e)}")
+        print(f"[ERROR] search failed: {str(e)}")
         return SearchResponse(
             success=False,
             error=f"搜索请求失败: {str(e)}"

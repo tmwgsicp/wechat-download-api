@@ -150,6 +150,21 @@ async def rss_page():
     """RSS 订阅管理页面"""
     return FileResponse(static_dir / "rss.html")
 
+@app.get("/categories.html", include_in_schema=False)
+async def categories_page():
+    """分类管理页面"""
+    return FileResponse(static_dir / "categories.html")
+
+@app.get("/blacklist.html", include_in_schema=False)
+async def blacklist_page():
+    """黑名单管理页面"""
+    return FileResponse(static_dir / "blacklist.html")
+
+@app.get("/history.html", include_in_schema=False)
+async def history_page():
+    """历史文章获取页面"""
+    return FileResponse(static_dir / "history.html")
+
 if __name__ == "__main__":
     import os
     import uvicorn

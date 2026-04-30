@@ -317,6 +317,19 @@
 
         .btn-unsub:hover { border-color: var(--error-color); color: var(--error-color); }
 
+        .btn-category {
+            padding: 4px 8px;
+            border-radius: var(--radius-small);
+            font-size: var(--font-xs);
+            cursor: pointer;
+            border: 1px solid var(--border-base);
+            background: transparent;
+            color: var(--text-secondary);
+            outline: none;
+            transition: all var(--duration-fast) var(--ease-in-out);
+        }
+        .btn-category:hover, .btn-category:focus { border-color: var(--primary-color); color: var(--primary-color); }
+
         /* Toast */
         .toast {
             position: fixed;
@@ -468,6 +481,18 @@
             }
         }
 
+        var categoriesCache = [];
+
+        async function loadCategories() {
+            try {
+                var res = await fetch('/api/admin/categories');
+                var d = await res.json();
+                categoriesCache = d.categories || [];
+            } catch (e) {
+                categoriesCache = [];
+            }
+        }
+
         async function loadSubscriptions() {
             var el = document.getElementById('subList');
             try {
@@ -489,8 +514,16 @@
                     html += '<div class="sub-item-meta">';
                     html += '<span>' + s.article_count + ' 篇文章</span>';
                     html += '<span>最后轮询: ' + lastPoll + '</span>';
+                    if (s.category_name) html += '<span style="color:var(--primary-color);">' + escHtml(s.category_name) + '</span>';
                     html += '</div></div>';
                     html += '<div class="sub-item-actions">';
+                    html += '<select class="btn-category" onchange="setCategory(\'' + escAttr(s.fakeid) + '\', this.value)">';
+                    html += '<option value="">分类</option>';
+                    categoriesCache.forEach(function(cat) {
+                        var sel = s.category_id === cat.id ? ' selected' : '';
+                        html += '<option value="' + cat.id + '"' + sel + '>' + escHtml(cat.name) + '</option>';
+                    });
+                    html += '</select>';
                     html += '<button class="btn-copy" onclick="copyRss(\'' + escAttr(s.rss_url) + '\')">复制 RSS</button>';
                     html += '<button class="btn-unsub" onclick="doUnsub(\'' + escAttr(s.fakeid) + '\')">取消</button>';
                     html += '</div></div></li>';
@@ -500,6 +533,21 @@
             } catch (e) {
                 el.innerHTML = '<div class="sub-empty">加载失败: ' + e.message + '</div>';
                 updateAggRssBar(false);
+            }
+        }
+
+        async function setCategory(fakeid, categoryId) {
+            try {
+                var res = await fetch('/api/admin/subscriptions/' + encodeURIComponent(fakeid) + '/category', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category_id: categoryId ? parseInt(categoryId) : null })
+                });
+                var d = await res.json();
+                showToast(d.message || (d.success ? '分类已更新' : '操作失败'));
+                loadSubscriptions();
+            } catch (e) {
+                showToast('网络错误: ' + e.message);
             }
         }
 
@@ -659,8 +707,9 @@
             if (e.key === 'Enter') doSearch();
         });
 
-        window.addEventListener('load', function() {
+        window.addEventListener('load', async function() {
             loadStatus();
+            await loadCategories();
             loadSubscriptions();
         });
     </script>

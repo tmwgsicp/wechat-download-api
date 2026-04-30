@@ -234,7 +234,7 @@ class AuthManager:
             
             return True
         except Exception as e:
-            print(f"❌ 清除凭证失败: {e}")
+            print(f"[ERROR] clear credentials failed: {e}")
             return False
 
 # 创建全局单例

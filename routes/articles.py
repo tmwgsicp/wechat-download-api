@@ -60,7 +60,7 @@ async def get_articles(
     - **keyword** (可选): 在该公众号内搜索关键词
     """
     try:
-        print(f"📋 获取文章列表: fakeid={fakeid[:8]}...")
+        print(f"[INFO] get article list: fakeid={fakeid[:8]}...")
         
         # 获取认证信息（用于请求微信API）
         creds = auth_manager.get_credentials()
@@ -117,7 +117,7 @@ async def get_articles(
             error_msg = base_resp.get("err_msg", "未知错误")
             ret_code = base_resp.get("ret")
             
-            print(f"❌ 微信API返回错误: ret={ret_code}, msg={error_msg}")
+            print(f"[ERROR] WeChat API error: ret={ret_code}, msg={error_msg}")
             
             # 检查是否需要重新登录
             if "login" in error_msg.lower() or ret_code == 200003:
@@ -191,20 +191,20 @@ async def get_articles(
         )
         
     except httpx.HTTPStatusError as e:
-        print(f"❌ HTTP错误: {e.response.status_code}")
+        print(f"[ERROR] HTTP error: {e.response.status_code}")
         return ArticlesResponse(
             success=False,
             error=f"请求失败: HTTP {e.response.status_code}"
         )
     except httpx.RequestError as e:
-        print(f"❌ 请求错误: {e}")
+        print(f"[ERROR] request error: {e}")
         return ArticlesResponse(
             success=False,
             error=f"网络请求失败: {str(e)}"
         )
     except Exception as e:
         import traceback
-        print(f"❌ 未知错误: {e}")
+        print(f"[ERROR] unknown error: {e}")
         traceback.print_exc()
         return ArticlesResponse(
             success=False,
