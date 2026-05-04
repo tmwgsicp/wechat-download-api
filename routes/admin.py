@@ -264,7 +264,7 @@ async def fetch_history_articles(req: FetchHistoryRequest):
     简化版：直接调用微信 API 获取历史文章列表，不涉及用户权限和付费逻辑。
     """
     from utils.auth_manager import auth_manager
-    from utils.rss_poller import poller
+    from utils.rss_poller import rss_poller
     
     # 检查登录状态
     status = auth_manager.get_status()
