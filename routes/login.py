@@ -597,3 +597,26 @@ async def get_login_info():
         "success": False,
         "error": "未登录"
     }
+
+
+@router.post("/remote/start", summary="触发远程登录（推送二维码到企微）")
+async def start_remote_login():
+    """
+    触发一次服务端远程登录流程：服务端取微信登录二维码并推送到企微机器人，
+    用户手机扫码确认后自动完成登录并保存凭证。
+
+    单飞：若已有流程在跑，返回当前 session_id 不再重复触发。
+    """
+    from utils.remote_login import remote_login
+    result = await remote_login.start()
+    return {"success": True, **result}
+
+
+@router.get("/remote/status", summary="查询远程登录状态")
+async def remote_login_status():
+    """返回当前远程登录流程是否在跑、对应的 session_id。"""
+    from utils.remote_login import remote_login
+    return {
+        "running": remote_login.is_running,
+        "session_id": remote_login.session_id,
+    }

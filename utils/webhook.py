@@ -12,6 +12,8 @@ Webhook 通知模块
 import httpx
 import time
 import os
+import hashlib
+import base64
 import logging
 from typing import Optional, Dict
 from datetime import datetime
@@ -23,6 +25,8 @@ EVENT_LABELS = {
     "login_expired": "登录过期",
     "login_expiring_soon": "登录即将过期",
     "login_expiring_critical": "登录即将过期（紧急）",
+    "login_qrcode_ready": "登录二维码",
+    "login_qrcode_expired": "登录二维码已过期",
     "verification_required": "触发验证",
     "content_fetch_failed": "文章内容获取失败",
 }
@@ -111,6 +115,73 @@ class WebhookNotifier:
             return True
         except Exception as e:
             logger.error("Webhook failed: %s - %s", event, e)
+            return False
+
+    async def notify_image(self, event: str, image_bytes: bytes,
+                           data: Optional[Dict] = None) -> bool:
+        """发送图片消息。
+
+        企业微信群机器人用 image msgtype（base64 + md5，限 2MB）。
+        通用 webhook 退化为 JSON，base64 嵌入 data 中。
+        """
+        url = self.webhook_url
+        if not url:
+            return False
+
+        if not image_bytes:
+            logger.warning("notify_image called with empty image: %s", event)
+            return False
+
+        if len(image_bytes) > 2 * 1024 * 1024:
+            logger.error("Image too large for WeCom (>%d bytes): %d",
+                         2 * 1024 * 1024, len(image_bytes))
+            return False
+
+        now = time.time()
+        last = self._last_notification.get(event, 0)
+        if now - last < self._notification_interval:
+            logger.debug("Skip duplicate webhook: %s (%ds since last)", event, int(now - last))
+            return False
+
+        if self._is_wecom(url):
+            b64 = base64.b64encode(image_bytes).decode("ascii")
+            md5 = hashlib.md5(image_bytes).hexdigest()
+            payload = {
+                "msgtype": "image",
+                "image": {"base64": b64, "md5": md5},
+            }
+        else:
+            label = EVENT_LABELS.get(event, event)
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            payload = {
+                "event": event,
+                "timestamp": int(time.time()),
+                "timestamp_str": ts,
+                "message": label,
+                "data": {
+                    **(data or {}),
+                    "image_base64": base64.b64encode(image_bytes).decode("ascii"),
+                },
+            }
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(url, json=payload)
+                resp.raise_for_status()
+
+                ct = resp.headers.get("content-type", "")
+                body = resp.json() if "json" in ct else {}
+                errcode = body.get("errcode", 0)
+                if errcode != 0:
+                    errmsg = body.get("errmsg", "unknown")
+                    logger.error("Webhook image errcode=%s: %s", errcode, errmsg)
+                    return False
+
+            self._last_notification[event] = now
+            logger.info("Webhook image sent: %s (%d bytes)", event, len(image_bytes))
+            return True
+        except Exception as e:
+            logger.error("Webhook image failed: %s - %s", event, e)
             return False
 
 

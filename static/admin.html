@@ -522,6 +522,7 @@
                 </div>
                 <ul class="nav-list">
                     <li><a href="/login.html"><span>扫码登录</span><span class="arrow">&#8250;</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="triggerRemoteLogin()"><span>远程登录（推送到企微）</span><span class="arrow">&#8250;</span></a></li>
                     <li><a href="/verify.html"><span>验证处理</span><span class="arrow">&#8250;</span></a></li>
                     <li><a href="/rss.html"><span>RSS 订阅</span><span class="arrow">&#8250;</span></a></li>
                 </ul>
@@ -707,6 +708,22 @@
             } catch (e) {
                 val.textContent = '退出失败: ' + e.message;
                 actions.innerHTML = '<button class="btn-sm" onclick="checkStatus()">刷新</button>';
+            }
+        }
+
+        async function triggerRemoteLogin() {
+            if (!confirm('将通过企微机器人推送登录二维码，请在手机微信上扫码完成登录。继续？')) return;
+
+            try {
+                var res = await fetch('/api/login/remote/start', { method: 'POST' });
+                var data = await res.json();
+                if (data.status === 'already_running') {
+                    alert('已有远程登录流程在跑，请在企微查收二维码');
+                } else {
+                    alert('二维码已推送到企微，请在 2 分钟内扫码');
+                }
+            } catch (e) {
+                alert('触发失败: ' + e.message);
             }
         }
 
