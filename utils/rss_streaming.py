@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from html import escape as html_escape
 from typing import Iterator
 
-from utils.image_proxy import proxy_image_url
+from utils.image_proxy import proxy_content_images, proxy_image_url
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,8 @@ def _build_item_xml(article: dict, base_url: str) -> str:
     title_escaped = html_escape(title)
     
     content_html = article.get("content", "")
+    if content_html:
+        content_html = proxy_content_images(content_html, base_url)
     html_parts = []
     
     if content_html:
