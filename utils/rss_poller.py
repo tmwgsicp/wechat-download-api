@@ -46,8 +46,6 @@ class RSSPoller:
     _instance = None
     _task: Optional[asyncio.Task] = None
     _running = False
-    # [2026-05-15 OS-4] 共享 httpx.AsyncClient 避免每轮每 fakeid 都新建（省 DNS+TLS 握手）
-    _http_client: Optional[httpx.AsyncClient] = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -58,11 +56,6 @@ class RSSPoller:
         if self._running:
             return
         self._running = True
-        # 创建长连接 client，连接池 + keep-alive 自动复用
-        self._http_client = httpx.AsyncClient(
-            timeout=30.0,
-            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
-        )
         self._task = asyncio.create_task(self._loop())
         logger.info("RSS poller started (interval=%ds)", POLL_INTERVAL)
 
@@ -74,13 +67,6 @@ class RSSPoller:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        # 关闭共享 client
-        if self._http_client is not None:
-            try:
-                await self._http_client.aclose()
-            except Exception:
-                pass
-            self._http_client = None
         logger.info("RSS poller stopped")
 
     @property
@@ -113,42 +99,51 @@ class RSSPoller:
         skipped = len(fakeids) - len(active_fakeids)
         
         if skipped > 0:
-            logger.info("RSS poll: %d subscriptions (%d blacklisted, skipped)", 
+            logger.info("RSS poll: %d subscriptions (%d blacklisted, skipped)",
                        len(fakeids), skipped)
         else:
             logger.info("RSS poll: checking %d subscriptions", len(fakeids))
 
-        for fakeid in active_fakeids:
-            try:
-                articles = await self._fetch_article_list(fakeid, creds)
-                if articles and FETCH_FULL_CONTENT:
-                    # 获取完整文章内容
-                    articles = await self._enrich_articles_content(fakeid, articles)
-
-                if articles:
-                    # 轮询器拉取的文章标记为 'poll'
-                    new_count = rss_store.save_articles(fakeid, articles, source='poll')
-                    if new_count > 0:
-                        logger.info("RSS: %d new articles for %s", new_count, fakeid[:8])
-                rss_store.update_last_poll(fakeid)
-            except WechatInvalidFakeidError as e:
-                # [2026-05-18] 同步 SaaS 修复：fakeid 在微信侧已失效，自动加入黑名单
-                # 取该 fakeid 的 nickname（如果数据库里有）便于后续运维查看
-                sub = rss_store.get_subscription(fakeid)
-                nickname = sub.get("nickname", "") if sub else ""
-                logger.warning("Fakeid %s (%s) is invalid on WeChat, adding to blacklist", fakeid[:8], nickname)
+        # 每个 poll cycle 起一个全新 client：避免长连接池在网络抖动后卡死不自愈。
+        # 与 remote_login / webhook / routes/* 等模块保持一致（短生命周期）。
+        # poll 频率本就低（默认 1h 一次），多一次 DNS+TLS 握手开销可忽略。
+        async with httpx.AsyncClient(
+            timeout=30.0,
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+        ) as client:
+            for fakeid in active_fakeids:
                 try:
-                    rss_store.add_to_blacklist(
-                        fakeid, nickname=nickname, reason="invalid_fakeid",
-                        note="[2026-05-18] 微信侧返回 invalid args，fakeid 已失效（注销/改名/重新注册）",
-                    )
-                except Exception as bl_err:
-                    logger.warning("Failed to blacklist invalid fakeid %s: %s", fakeid[:8], bl_err)
-            except Exception as e:
-                logger.error("RSS poll error for %s: %s", fakeid[:8], e)
-            await asyncio.sleep(3)
+                    articles = await self._fetch_article_list(fakeid, creds, client)
+                    if articles and FETCH_FULL_CONTENT:
+                        # 获取完整文章内容
+                        articles = await self._enrich_articles_content(fakeid, articles)
 
-    async def _fetch_article_list(self, fakeid: str, creds: Dict) -> List[Dict]:
+                    if articles:
+                        # 轮询器拉取的文章标记为 'poll'
+                        new_count = rss_store.save_articles(fakeid, articles, source='poll')
+                        if new_count > 0:
+                            logger.info("RSS: %d new articles for %s", new_count, fakeid[:8])
+                    rss_store.update_last_poll(fakeid)
+                except WechatInvalidFakeidError as e:
+                    # [2026-05-18] 同步 SaaS 修复：fakeid 在微信侧已失效，自动加入黑名单
+                    # 取该 fakeid 的 nickname（如果数据库里有）便于后续运维查看
+                    sub = rss_store.get_subscription(fakeid)
+                    nickname = sub.get("nickname", "") if sub else ""
+                    logger.warning("Fakeid %s (%s) is invalid on WeChat, adding to blacklist", fakeid[:8], nickname)
+                    try:
+                        rss_store.add_to_blacklist(
+                            fakeid, nickname=nickname, reason="invalid_fakeid",
+                            note="[2026-05-18] 微信侧返回 invalid args，fakeid 已失效（注销/改名/重新注册）",
+                        )
+                    except Exception as bl_err:
+                        logger.warning("Failed to blacklist invalid fakeid %s: %s", fakeid[:8], bl_err)
+                except Exception as e:
+                    # %r 拿异常类型 + repr；exc_info=True 打完整 Traceback
+                    # 避免某些 httpx transport error str(e) 为空时日志变成 "RSS poll error for X: "
+                    logger.error("RSS poll error for %s: %r", fakeid[:8], e, exc_info=True)
+                await asyncio.sleep(3)
+
+    async def _fetch_article_list(self, fakeid: str, creds: Dict, client: httpx.AsyncClient) -> List[Dict]:
         params = {
             "sub": "list",
             "search_field": "null",
@@ -170,25 +165,13 @@ class RSSPoller:
             "Cookie": creds["cookie"],
         }
 
-        # [2026-05-15 OS-4] 使用共享 client，省 DNS+TLS 握手
-        # 兜底：若 client 未初始化（理论不会发生），退回到每次新建
-        if self._http_client is not None:
-            resp = await self._http_client.get(
-                "https://mp.weixin.qq.com/cgi-bin/appmsgpublish",
-                params=params,
-                headers=headers,
-            )
-            resp.raise_for_status()
-            result = resp.json()
-        else:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(
-                    "https://mp.weixin.qq.com/cgi-bin/appmsgpublish",
-                    params=params,
-                    headers=headers,
-                )
-                resp.raise_for_status()
-                result = resp.json()
+        resp = await client.get(
+            "https://mp.weixin.qq.com/cgi-bin/appmsgpublish",
+            params=params,
+            headers=headers,
+        )
+        resp.raise_for_status()
+        result = resp.json()
 
         base_resp = result.get("base_resp", {})
         if base_resp.get("ret") != 0:
