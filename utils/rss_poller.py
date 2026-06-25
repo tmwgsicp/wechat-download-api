@@ -22,6 +22,7 @@ from utils.auth_manager import auth_manager
 from utils import rss_store
 from utils.helpers import extract_article_info, parse_article_url, is_image_text_message, has_article_content, is_article_unavailable, get_unavailable_reason
 from utils.http_client import fetch_page
+from utils.webhook import webhook
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,9 @@ class RSSPoller:
     _instance = None
     _task: Optional[asyncio.Task] = None
     _running = False
+    # 健康监控状态机：healthy → degraded(1..threshold-1) → alerted(>=threshold) → recovered
+    _consecutive_fail_cycles: int = 0
+    _health_alerted: bool = False
 
     def __new__(cls):
         if cls._instance is None:
@@ -107,6 +111,8 @@ class RSSPoller:
         # 每个 poll cycle 起一个全新 client：避免长连接池在网络抖动后卡死不自愈。
         # 与 remote_login / webhook / routes/* 等模块保持一致（短生命周期）。
         # poll 频率本就低（默认 1h 一次），多一次 DNS+TLS 握手开销可忽略。
+        failure_count = 0
+        sample_error: Optional[str] = None
         async with httpx.AsyncClient(
             timeout=30.0,
             limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
@@ -127,6 +133,7 @@ class RSSPoller:
                 except WechatInvalidFakeidError as e:
                     # [2026-05-18] 同步 SaaS 修复：fakeid 在微信侧已失效，自动加入黑名单
                     # 取该 fakeid 的 nickname（如果数据库里有）便于后续运维查看
+                    # 注意：fakeid 失效不算 poller 健康问题（httpx 调用本身成功了）
                     sub = rss_store.get_subscription(fakeid)
                     nickname = sub.get("nickname", "") if sub else ""
                     logger.warning("Fakeid %s (%s) is invalid on WeChat, adding to blacklist", fakeid[:8], nickname)
@@ -141,7 +148,86 @@ class RSSPoller:
                     # %r 拿异常类型 + repr；exc_info=True 打完整 Traceback
                     # 避免某些 httpx transport error str(e) 为空时日志变成 "RSS poll error for X: "
                     logger.error("RSS poll error for %s: %r", fakeid[:8], e, exc_info=True)
+                    failure_count += 1
+                    if sample_error is None:
+                        sample_error = f"{type(e).__name__}: {e!r}"
                 await asyncio.sleep(3)
+
+        # 健康状态评估（cycle 结束后）
+        await self._evaluate_health(
+            failure_count=failure_count,
+            total=len(active_fakeids),
+            sample_error=sample_error,
+        )
+
+    async def _evaluate_health(
+        self,
+        *,
+        failure_count: int,
+        total: int,
+        sample_error: Optional[str],
+    ) -> None:
+        """根据本轮 cycle 的失败情况，更新健康状态并按需发 webhook 告警。
+
+        状态机：healthy → degraded(1..threshold-1) → alerted(>=threshold) → recovered。
+        全部 fakeid 都失败才算"全失败"（部分成功视为健康）。
+        阈值默认 3（约 3 小时），env POLLER_FAIL_THRESHOLD 可调。
+        """
+        threshold = int(os.getenv("POLLER_FAIL_THRESHOLD", "3"))
+        all_failed = total > 0 and failure_count == total
+
+        if all_failed:
+            self._consecutive_fail_cycles += 1
+            n = self._consecutive_fail_cycles
+            reason = (sample_error or "unknown")[:200]
+            if n < threshold:
+                logger.warning(
+                    "Poller 全部 %d 个公众号抓取失败（连续 %d/%d 次），暂未告警: %s",
+                    total, n, threshold, reason,
+                )
+                return
+
+            if self._health_alerted:
+                # webhook 自身有 300s 去重，这里是状态机层避免重复发
+                return
+
+            hours = n * POLL_INTERVAL / 3600
+            logger.error(
+                "Poller 连续 %d 次全失败（约 %.1f 小时），触发 webhook 告警: %s",
+                n, hours, reason,
+            )
+            try:
+                await webhook.notify('poller_stuck', {
+                    'consecutive_failures': n,
+                    'hours': round(hours, 1),
+                    'reason': (sample_error or "unknown")[:300],
+                    'level': 'critical',
+                    'message': f'RSS Poller 已连续 {n} 次失败（约 {hours:.1f} 小时），RSS feed 不再更新',
+                })
+                self._health_alerted = True
+            except Exception as e:
+                logger.error("Failed to send poller_stuck webhook: %r", e)
+        else:
+            # 部分或全部成功 → 恢复
+            if self._consecutive_fail_cycles > 0 or self._health_alerted:
+                prev = self._consecutive_fail_cycles
+                alerted = self._health_alerted
+                logger.info(
+                    "Poller 恢复健康：连续失败 %d → 0（本轮 %d 失败/%d 总）",
+                    prev, failure_count, total,
+                )
+                if alerted:
+                    try:
+                        await webhook.notify('poller_recovered', {
+                            'previous_failures': prev,
+                            'partial_failures': failure_count,
+                            'level': 'info',
+                            'message': f'RSS Poller 已恢复正常工作（之前连续失败 {prev} 次）',
+                        })
+                    except Exception as e:
+                        logger.error("Failed to send poller_recovered webhook: %r", e)
+            self._consecutive_fail_cycles = 0
+            self._health_alerted = False
 
     async def _fetch_article_list(self, fakeid: str, creds: Dict, client: httpx.AsyncClient) -> List[Dict]:
         params = {

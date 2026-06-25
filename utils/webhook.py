@@ -29,6 +29,8 @@ EVENT_LABELS = {
     "login_qrcode_expired": "登录二维码已过期",
     "verification_required": "触发验证",
     "content_fetch_failed": "文章内容获取失败",
+    "poller_stuck": "RSS Poller 卡死",
+    "poller_recovered": "RSS Poller 恢复",
 }
 
 
