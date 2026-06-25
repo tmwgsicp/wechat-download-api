@@ -128,7 +128,7 @@ class LoginReminder:
             "登录凭证即将过期（紧急）[%s] - 剩余 %.1f 小时",
             nickname, hours
         )
-        
+
         await webhook.notify('login_expiring_critical', {
             'nickname': nickname,
             'hours_left': round(hours, 1),
@@ -136,14 +136,28 @@ class LoginReminder:
             'message': f'登录凭证将在 {round(hours, 1)} 小时后过期（紧急），请立即重新登录',
         })
 
+        # 自动触发远程登录，把二维码推到企微让用户手机扫码
+        await self._trigger_remote_login(source='expiring_critical')
+
     async def _notify_expired(self, nickname: str):
         """发送已过期通知"""
         logger.error("登录凭证已过期 [%s]", nickname)
-        
+
         await webhook.notify('login_expired', {
             'nickname': nickname,
             'message': '登录凭证已过期，API 功能将受限，请重新登录',
         })
+
+        await self._trigger_remote_login(source='expired')
+
+    async def _trigger_remote_login(self, source: str) -> None:
+        """安全地拉起一次远程登录；失败不影响主流程。"""
+        try:
+            from utils.remote_login import remote_login
+            result = await remote_login.start()
+            logger.info("远程登录已触发 [%s]: %s", source, result)
+        except Exception as e:
+            logger.error("触发远程登录失败 [%s]: %s", source, e, exc_info=True)
 
 
 # 全局单例

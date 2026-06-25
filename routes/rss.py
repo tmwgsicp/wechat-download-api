@@ -331,6 +331,114 @@ def _build_opml_response(subs: list, base_url: str) -> Response:
     )
 
 
+# ── 单源 RSS ─────────────────────────────────────────────
+
+@router.get("/rss/{fakeid}", summary="获取 RSS 订阅源",
+            response_class=Response)
+async def get_rss_feed(fakeid: str, request: Request,
+                       limit: int = Query(RSS_SINGLE_DEFAULT, ge=1, le=RSS_SINGLE_MAX,
+                                          description="文章数量上限")):
+    """
+    获取指定公众号的 RSS 2.0 订阅源（XML 格式）。
+
+    只包含订阅后发布的文章（常规更新），历史文章请使用 /api/rss/{fakeid}/history
+
+    **路径参数：**
+    - **fakeid**: 公众号 FakeID
+
+    **查询参数：**
+    - **limit** (可选): 返回文章数量上限，默认 30
+    """
+    sub = rss_store.get_subscription(fakeid)
+    if not sub:
+        raise HTTPException(status_code=404, detail="未找到该订阅，请先添加订阅")
+
+    articles = rss_store.get_regular_articles(fakeid, limit=limit)
+    base_url = get_base_url(request)
+
+    return StreamingResponse(
+        generate_single_rss_stream(fakeid, sub, articles, base_url),
+        media_type="application/rss+xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
+@router.get("/rss/{fakeid}/history", summary="获取历史文章 RSS 订阅源",
+            response_class=Response)
+async def get_historical_rss_feed(
+    fakeid: str,
+    request: Request,
+    page: int = Query(1, ge=1, description="页码"),
+    per_page: int = Query(RSS_HISTORICAL_DEFAULT, ge=10, le=RSS_HISTORICAL_MAX, description="每页数量"),
+):
+    """
+    获取指定公众号的历史文章 RSS 2.0 订阅源（XML 格式）。
+
+    **路径参数：**
+    - **fakeid**: 公众号 FakeID
+
+    **查询参数：**
+    - **page** (可选): 页码，默认 1
+    - **per_page** (可选): 每页数量，默认 500，最大 5000
+    """
+    sub = rss_store.get_subscription(fakeid)
+    if not sub:
+        raise HTTPException(status_code=404, detail="未找到该订阅，请先添加订阅")
+
+    total_count = rss_store.count_historical_articles(fakeid)
+    if total_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="该公众号暂无历史文章，请先使用'获取历史文章'功能拉取"
+        )
+
+    offset = (page - 1) * per_page
+    articles = rss_store.get_historical_articles(fakeid, limit=per_page, offset=offset)
+    total_pages = (total_count + per_page - 1) // per_page
+    base_url = get_base_url(request)
+
+    return StreamingResponse(
+        generate_historical_rss_stream(
+            fakeid, sub, articles, base_url,
+            page=page, total_pages=total_pages, total_count=total_count
+        ),
+        media_type="application/rss+xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+# ── 分类 RSS ─────────────────────────────────────────────
+
+@router.get("/rss/category/{category_id}", summary="获取分类 RSS 订阅源",
+            response_class=Response)
+async def get_category_rss_feed(category_id: int, request: Request,
+                                limit: int = Query(RSS_CATEGORY_DEFAULT, ge=1, le=RSS_CATEGORY_MAX,
+                                                   description="文章数量上限")):
+    """
+    获取指定分类的 RSS 2.0 订阅源（XML 格式）。
+
+    **路径参数：**
+    - **category_id**: 分类 ID
+
+    **查询参数：**
+    - **limit** (可选): 返回文章数量上限
+    """
+    category = rss_store.get_category(category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="分类不存在")
+
+    subscriptions = rss_store.get_subscriptions_by_category(category_id)
+    nickname_map = {s["fakeid"]: s.get("nickname", s["fakeid"]) for s in subscriptions}
+    articles = rss_store.get_articles_by_category(category_id, limit=limit)
+    base_url = get_base_url(request)
+
+    return StreamingResponse(
+        generate_category_rss_stream(category, articles, nickname_map, base_url),
+        media_type="application/rss+xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
 # ── RSS XML 输出 ──────────────────────────────────────────
 
 def _rfc822(ts: int) -> str:
