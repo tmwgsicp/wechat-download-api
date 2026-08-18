@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tmwgsicp-wechat-download-api-badge.png)](https://mseep.ai/app/tmwgsicp-wechat-download-api)
+
 <div align="center">
 
 # WeChat Download API
