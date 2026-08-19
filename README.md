@@ -886,7 +886,7 @@ Cookie 登录有效期约 4 天，系统会：
 
 **如果觉得项目有用，请给个 Star 支持一下！**
 
-[![Star History Chart](https://api.star-history.com/svg?repos=tmwgsicp/wechat-download-api&type=Date)](https://star-history.com/#tmwgsicp/wechat-download-api&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=tmwgsicp/wechat-download-api&type=Date)](https://star-history.dera.page/#tmwgsicp/wechat-download-api&Date)
 
 Made with ❤️ by [tmwgsicp](https://github.com/tmwgsicp)
 
